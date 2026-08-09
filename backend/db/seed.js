@@ -30,7 +30,7 @@ function run() {
   ).run(
     storeId,
     "Tony's Pizzeria",
-    'owner@eatery.app',
+    'owner@kahumbo.app',
     '221 Main Street',
     'Springfield',
     '62701',
@@ -114,7 +114,7 @@ function run() {
   ];
   desserts.forEach(([n, d, p]) => insertItem.run(id(), storeId, categories[3].id, n, d, p, null, 1));
 
-  // Store-admin account (formerly "admin"): owner@eatery.app / admin123
+  // Store-admin account (formerly "admin"): owner@kahumbo.app / admin123
   const insertUser = db.prepare(`
     INSERT INTO users (id, name, email, phone, password_hash, role, store_id)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -122,7 +122,7 @@ function run() {
   insertUser.run(
     id(),
     "Tony (Owner)",
-    'owner@eatery.app',
+    'owner@kahumbo.app',
     '0000000000',
     bcrypt.hashSync('admin123', 10),
     'store_admin',
@@ -130,12 +130,12 @@ function run() {
   );
 
   // Demo customer, registered ~1.2km from the store (within the 6km radius):
-  // customer@eatery.app / customer123
+  // customer@kahumbo.app / customer123
   const customerId = id();
   insertUser.run(
     customerId,
     'Casey Customer',
-    'customer@eatery.app',
+    'customer@kahumbo.app',
     '1111111111',
     bcrypt.hashSync('customer123', 10),
     'customer',
@@ -147,8 +147,8 @@ function run() {
   ).run(id(), customerId, '450 Oak Avenue', 'Springfield', '62701', 39.79, -89.645);
 
   console.log('Seed complete.');
-  console.log('Store admin login -> email: owner@eatery.app     password: admin123');
-  console.log('Demo customer      -> email: customer@eatery.app  password: customer123');
+  console.log('Store admin login -> email: owner@kahumbo.app     password: admin123');
+  console.log('Demo customer      -> email: customer@kahumbo.app  password: customer123');
   console.log(`Store location: lat 39.7817, lng -89.6501 (service radius ${6}km)`);
 }
 

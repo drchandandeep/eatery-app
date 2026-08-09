@@ -6,6 +6,7 @@ const { nanoid } = require('nanoid');
 const db = require('../db/database');
 const { requireAuth, JWT_SECRET } = require('../middleware/auth');
 const { haversineKm, isValidCoordinate } = require('../utils/geo');
+const { effectiveStoreStatus: effectiveStatus } = require('../utils/subscription');
 
 const router = express.Router();
 
@@ -15,14 +16,6 @@ function signToken(user) {
     JWT_SECRET,
     { expiresIn: '30d' }
   );
-}
-
-function effectiveStatus(store) {
-  if (store.subscription_status === 'active') {
-    const expired = !store.subscription_expires_at || new Date(store.subscription_expires_at) < new Date();
-    return expired ? 'expired' : 'active';
-  }
-  return store.subscription_status;
 }
 
 // POST /api/auth/signup  (customer signup only -- store owners use

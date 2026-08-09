@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setAuthToken } from '../api/client';
 
 const AuthContext = createContext(null);
-const STORAGE_KEY = 'eatery.auth';
+const STORAGE_KEY = 'kahumbo.auth';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);

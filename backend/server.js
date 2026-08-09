@@ -32,5 +32,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Eatery backend running on http://localhost:${PORT}`);
+  console.log(`Kahumbo backend running on http://localhost:${PORT}`);
 });

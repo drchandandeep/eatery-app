@@ -3,6 +3,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
+const { effectiveStoreStatus } = require('../utils/subscription');
 
 const router = express.Router();
 
@@ -36,13 +37,18 @@ router.get('/', softAuth, (req, res) => {
 
   const categories = db.prepare('SELECT * FROM categories WHERE store_id = ? ORDER BY sort_order').all(storeId);
   const items = db.prepare('SELECT * FROM menu_items WHERE store_id = ? AND is_available = 1').all(storeId);
+  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
 
   const byCategory = categories.map((cat) => ({
     ...cat,
     items: items.filter((i) => i.category_id === cat.id),
   }));
 
-  res.json({ store_id: storeId, categories: byCategory });
+  res.json({
+    store_id: storeId,
+    store_active: store ? effectiveStoreStatus(store) === 'active' : false,
+    categories: byCategory,
+  });
 });
 
 // GET /api/menu/items/:id -> full detail incl. option groups + choices

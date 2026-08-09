@@ -3,6 +3,7 @@ const express = require('express');
 const { nanoid } = require('nanoid');
 const db = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
+const { effectiveStoreStatus } = require('../utils/subscription');
 
 const router = express.Router();
 
@@ -24,6 +25,16 @@ router.post('/', requireAuth, (req, res) => {
   }
 
   const storeId = req.user.store_id;
+
+  // Full stop: if the store's annual subscription has lapsed, new orders
+  // are blocked immediately -- this is what actually makes the store "go
+  // dark" to its own already-registered customers, not just to new signups.
+  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
+  if (!store || effectiveStoreStatus(store) !== 'active') {
+    return res.status(402).json({
+      error: 'This store is temporarily unavailable for ordering (subscription inactive). Please check back later.',
+    });
+  }
 
   const insertOrder = db.prepare(`
     INSERT INTO orders (id, store_id, user_id, status, subtotal, delivery_fee, tax, total, address_line, payment_method)

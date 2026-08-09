@@ -56,7 +56,7 @@ export default function MenuScreen({ navigation }) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={type.display}>Eatery</Text>
+        <Text style={type.display}>Kahumbo</Text>
         <Pressable onPress={() => navigation.navigate('Cart')} style={styles.cartBtn}>
           <Text style={styles.cartBtnText}>Cart{itemCount > 0 ? ` (${itemCount})` : ''}</Text>
         </Pressable>

@@ -1,5 +1,5 @@
 {
-  "name": "eatery-app",
+  "name": "kahumbo-app",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
 
   // Ports the app needs reachable from outside the container:

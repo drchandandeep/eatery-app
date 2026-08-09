@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('owner@eatery.app');
+  const [email, setEmail] = useState('owner@kahumbo.app');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
 

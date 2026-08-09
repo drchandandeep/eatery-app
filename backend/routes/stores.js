@@ -6,6 +6,7 @@ const { nanoid } = require('nanoid');
 const db = require('../db/database');
 const { requireAuth, requireStoreAdmin, JWT_SECRET } = require('../middleware/auth');
 const { haversineKm, isValidCoordinate } = require('../utils/geo');
+const { effectiveStoreStatus: effectiveStatus } = require('../utils/subscription');
 
 const router = express.Router();
 
@@ -41,14 +42,6 @@ function publicStore(store) {
     subscription_started_at: store.subscription_started_at,
     subscription_expires_at: store.subscription_expires_at,
   };
-}
-
-function effectiveStatus(store) {
-  if (store.subscription_status === 'active') {
-    const expired = !store.subscription_expires_at || new Date(store.subscription_expires_at) < new Date();
-    return expired ? 'expired' : 'active';
-  }
-  return store.subscription_status;
 }
 
 // POST /api/stores/register

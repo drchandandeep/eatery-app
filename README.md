@@ -1,4 +1,4 @@
-# Eatery App
+# Kahumbo
 
 A full-stack, **multi-store** food-ordering platform: stores register and
 pay an annual subscription, customers sign up for free (tied to one nearby
@@ -46,8 +46,8 @@ npm start                   # runs on http://localhost:4000
 ```
 
 Seeded logins:
-- **Store admin:** owner@eatery.app / admin123 (subscription pre-activated for 1 year)
-- **Demo customer:** customer@eatery.app / customer123 (registered ~1km from the seeded store)
+- **Store admin:** owner@kahumbo.app / admin123 (subscription pre-activated for 1 year)
+- **Demo customer:** customer@kahumbo.app / customer123 (registered ~1km from the seeded store)
 
 Quick check it's alive: `curl http://localhost:4000/api/health`
 

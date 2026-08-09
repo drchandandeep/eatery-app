@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Eatery",
-    "slug": "eatery-app",
+    "name": "Kahumbo",
+    "slug": "kahumbo-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -11,10 +11,10 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.eatery"
+      "bundleIdentifier": "com.yourcompany.kahumbo"
     },
     "android": {
-      "package": "com.yourcompany.eatery",
+      "package": "com.yourcompany.kahumbo",
       "adaptiveIcon": {
         "backgroundColor": "#171512"
       }

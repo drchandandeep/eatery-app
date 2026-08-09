@@ -1,9 +1,10 @@
 // screens/AdminDashboardScreen.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
+import { showAlert } from '../utils/alert';
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -46,10 +47,10 @@ export default function AdminDashboardScreen({ navigation }) {
     try {
       const { store: s, message } = await api.subscribeStore();
       setStore(s);
-      Alert.alert('Subscription active', message);
+      showAlert('Subscription active', message);
       load();
     } catch (err) {
-      Alert.alert('Payment failed', err.message);
+      showAlert('Payment failed', err.message);
     } finally {
       setSubscribing(false);
     }
@@ -109,6 +110,12 @@ export default function AdminDashboardScreen({ navigation }) {
             title="Manage live orders"
             onPress={() => navigation.navigate('AdminOrders')}
             style={{ marginTop: spacing(6) }}
+          />
+          <Button
+            title="Manage menu"
+            variant="outline"
+            onPress={() => navigation.navigate('AdminMenu')}
+            style={{ marginTop: spacing(3) }}
           />
         </>
       )}

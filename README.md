@@ -172,7 +172,7 @@ machine pointed at that deployed backend URL.
 | Order history | `OrderHistoryScreen` + `GET /api/orders` |
 | Admin dashboard (stats, top items, subscription status) | `AdminDashboardScreen` + `GET /api/admin/stats` |
 | Admin order management (advance status) | `AdminOrdersScreen` + `PATCH /api/admin/orders/:id/status` |
-| Admin menu CRUD | `POST/PATCH/DELETE /api/admin/menu/items` (API-only for now — wire up a UI screen when ready) |
+| Admin menu management (add/edit/delete items & categories, toggle availability) | `AdminMenuScreen` + `GET/POST/PATCH/DELETE /api/admin/menu` and `/api/admin/categories` |
 
 ## Notes & next steps
 

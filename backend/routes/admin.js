@@ -68,6 +68,23 @@ router.get('/stats', (req, res) => {
 
 // ---- Menu management (scoped to this store) ----
 
+// GET /api/admin/menu -> full menu for editing, including unavailable items
+// (the public GET /api/menu only returns is_available=1 items -- this one
+// is for the store owner to see and manage everything).
+router.get('/menu', (req, res) => {
+  const storeId = req.user.store_id;
+  const categories = db.prepare('SELECT * FROM categories WHERE store_id = ? ORDER BY sort_order').all(storeId);
+  const items = db.prepare('SELECT * FROM menu_items WHERE store_id = ?').all(storeId);
+
+  const byCategory = categories.map((cat) => ({
+    ...cat,
+    items: items.filter((i) => i.category_id === cat.id),
+  }));
+  const uncategorized = items.filter((i) => !i.category_id);
+
+  res.json({ categories: byCategory, uncategorized });
+});
+
 // POST /api/admin/menu/items
 router.post('/menu/items', (req, res) => {
   const { category_id, name, description, base_price, is_veg } = req.body;
@@ -122,6 +139,32 @@ router.post('/categories', (req, res) => {
     sort_order || 0
   );
   res.status(201).json({ category: db.prepare('SELECT * FROM categories WHERE id = ?').get(id) });
+});
+
+// PATCH /api/admin/categories/:id
+router.patch('/categories/:id', (req, res) => {
+  const cat = db.prepare('SELECT * FROM categories WHERE id = ? AND store_id = ?').get(req.params.id, req.user.store_id);
+  if (!cat) return res.status(404).json({ error: 'Category not found' });
+
+  const fields = ['name', 'sort_order'];
+  const updates = fields.filter((f) => f in req.body);
+  if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' });
+
+  const setClause = updates.map((f) => `${f} = ?`).join(', ');
+  const values = updates.map((f) => req.body[f]);
+  db.prepare(`UPDATE categories SET ${setClause} WHERE id = ?`).run(...values, cat.id);
+
+  res.json({ category: db.prepare('SELECT * FROM categories WHERE id = ?').get(cat.id) });
+});
+
+// DELETE /api/admin/categories/:id
+// Items in this category aren't deleted -- the DB foreign key sets their
+// category_id to NULL (see ON DELETE SET NULL in the schema), so they just
+// become "uncategorized" rather than disappearing.
+router.delete('/categories/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM categories WHERE id = ? AND store_id = ?').run(req.params.id, req.user.store_id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Category not found' });
+  res.json({ success: true });
 });
 
 module.exports = router;

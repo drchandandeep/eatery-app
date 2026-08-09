@@ -1,11 +1,12 @@
 // screens/SignupScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Alert, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import { colors, spacing, type, radius } from '../theme';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
+import { showAlert } from '../utils/alert';
 
 export default function SignupScreen({ navigation }) {
   const { signup } = useAuth();
@@ -29,9 +30,9 @@ export default function SignupScreen({ navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Location needed',
-          'We use your location only to confirm you\u2019re within a store\u2019s 5-6km delivery area. Please allow location access.'
+          'We use your location only to confirm you\u2019re within a store\u2019s delivery area (up to 10km). Please allow location access.'
         );
         return;
       }
@@ -41,13 +42,13 @@ export default function SignupScreen({ navigation }) {
       setCoords({ lat, lng });
 
       setFindingStores(true);
-      const { stores } = await api.nearbyStores(lat, lng, 6);
+      const { stores } = await api.nearbyStores(lat, lng, 10);
       setNearbyStores(stores);
       if (stores.length === 0) {
-        Alert.alert('No stores nearby', 'There are no active stores within 6km of your current location yet.');
+        showAlert('No stores nearby', 'There are no active stores within 6km of your current location yet.');
       }
     } catch (err) {
-      Alert.alert('Could not get location', err.message);
+      showAlert('Could not get location', err.message);
     } finally {
       setLocating(false);
       setFindingStores(false);
@@ -56,19 +57,19 @@ export default function SignupScreen({ navigation }) {
 
   async function handleSignup() {
     if (!name || !email || !password) {
-      Alert.alert('Missing info', 'Name, email and password are required.');
+      showAlert('Missing info', 'Name, email and password are required.');
       return;
     }
     if (!coords) {
-      Alert.alert('Location needed', 'Tap "Find stores near me" first so we can verify you\u2019re in range.');
+      showAlert('Location needed', 'Tap "Find stores near me" first so we can verify you\u2019re in range.');
       return;
     }
     if (!selectedStoreId) {
-      Alert.alert('Pick a store', 'Select the store you\u2019d like to order from.');
+      showAlert('Pick a store', 'Select the store you\u2019d like to order from.');
       return;
     }
     if (!addressLine.trim()) {
-      Alert.alert('Address needed', 'Add your delivery address line.');
+      showAlert('Address needed', 'Add your delivery address line.');
       return;
     }
     setLoading(true);
@@ -88,7 +89,7 @@ export default function SignupScreen({ navigation }) {
         },
       });
     } catch (err) {
-      Alert.alert('Signup failed', err.message);
+      showAlert('Signup failed', err.message);
     } finally {
       setLoading(false);
     }

@@ -36,7 +36,7 @@ function run() {
     '62701',
     39.7817,
     -89.6501,
-    6,
+    7,
     499.0,
     now.toISOString(),
     oneYearFromNow.toISOString()
@@ -129,7 +129,7 @@ function run() {
     storeId
   );
 
-  // Demo customer, registered ~1.2km from the store (within the 6km radius):
+  // Demo customer, registered ~1.2km from the store (within the 7km radius):
   // customer@kahumbo.app / customer123
   const customerId = id();
   insertUser.run(
@@ -149,7 +149,7 @@ function run() {
   console.log('Seed complete.');
   console.log('Store admin login -> email: owner@kahumbo.app     password: admin123');
   console.log('Demo customer      -> email: customer@kahumbo.app  password: customer123');
-  console.log(`Store location: lat 39.7817, lng -89.6501 (service radius ${6}km)`);
+  console.log(`Store location: lat 39.7817, lng -89.6501 (service radius ${7}km)`);
 }
 
 run();

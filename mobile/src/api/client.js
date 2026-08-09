@@ -35,7 +35,7 @@ export const api = {
   me: (token) => request('/auth/me', { token }),
 
   // stores
-  nearbyStores: (lat, lng, radiusKm = 6) =>
+  nearbyStores: (lat, lng, radiusKm = 10) =>
     request(`/stores/nearby?lat=${lat}&lng=${lng}&radius_km=${radiusKm}`),
   registerStore: (payload) => request('/stores/register', { method: 'POST', body: payload }),
   myStore: () => request('/stores/me'),
@@ -55,4 +55,13 @@ export const api = {
   adminOrders: (status) => request(`/admin/orders${status ? `?status=${status}` : ''}`),
   adminUpdateOrderStatus: (id, status) =>
     request(`/admin/orders/${id}/status`, { method: 'PATCH', body: { status } }),
+
+  // admin menu management (store_admin)
+  adminGetMenu: () => request('/admin/menu'),
+  adminCreateItem: (payload) => request('/admin/menu/items', { method: 'POST', body: payload }),
+  adminUpdateItem: (id, payload) => request(`/admin/menu/items/${id}`, { method: 'PATCH', body: payload }),
+  adminDeleteItem: (id) => request(`/admin/menu/items/${id}`, { method: 'DELETE' }),
+  adminCreateCategory: (payload) => request('/admin/categories', { method: 'POST', body: payload }),
+  adminUpdateCategory: (id, payload) => request(`/admin/categories/${id}`, { method: 'PATCH', body: payload }),
+  adminDeleteCategory: (id) => request(`/admin/categories/${id}`, { method: 'DELETE' }),
 };

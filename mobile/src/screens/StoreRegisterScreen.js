@@ -1,10 +1,11 @@
 // screens/StoreRegisterScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView } from 'react-native';
 import * as Location from 'expo-location';
 import { colors, spacing, type, radius } from '../theme';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
+import { showAlert } from '../utils/alert';
 
 export default function StoreRegisterScreen({ navigation }) {
   const { registerStore } = useAuth();
@@ -25,13 +26,13 @@ export default function StoreRegisterScreen({ navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Location needed', 'Allow location access from inside the store to set its permanent location.');
+        showAlert('Location needed', 'Allow location access from inside the store to set its permanent location.');
         return;
       }
       const pos = await Location.getCurrentPositionAsync({});
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
     } catch (err) {
-      Alert.alert('Could not get location', err.message);
+      showAlert('Could not get location', err.message);
     } finally {
       setLocating(false);
     }
@@ -39,11 +40,11 @@ export default function StoreRegisterScreen({ navigation }) {
 
   async function handleRegister() {
     if (!ownerName || !ownerEmail || !ownerPassword || !storeName || !addressLine) {
-      Alert.alert('Missing info', 'Owner name, email, password, store name and address are required.');
+      showAlert('Missing info', 'Owner name, email, password, store name and address are required.');
       return;
     }
     if (!coords) {
-      Alert.alert('Store location needed', 'Tap "Use my current location" while at the store.');
+      showAlert('Store location needed', 'Tap "Use my current location" while at the store.');
       return;
     }
     setLoading(true);
@@ -60,12 +61,12 @@ export default function StoreRegisterScreen({ navigation }) {
         lat: coords.lat,
         lng: coords.lng,
       });
-      Alert.alert(
+      showAlert(
         'Store registered',
         'One last step: activate your annual subscription from the admin dashboard so customers can start ordering.'
       );
     } catch (err) {
-      Alert.alert('Registration failed', err.message);
+      showAlert('Registration failed', err.message);
     } finally {
       setLoading(false);
     }

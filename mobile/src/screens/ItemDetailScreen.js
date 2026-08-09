@@ -1,10 +1,11 @@
 // screens/ItemDetailScreen.js
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
 import { useCart } from '../context/CartContext';
+import { showAlert } from '../utils/alert';
 
 export default function ItemDetailScreen({ route, navigation }) {
   const { itemId } = route.params;
@@ -72,7 +73,7 @@ export default function ItemDetailScreen({ route, navigation }) {
 
   function handleAdd() {
     if (!canAddToCart()) {
-      Alert.alert('Almost there', 'Please choose the required options before adding to cart.');
+      showAlert('Almost there', 'Please choose the required options before adding to cart.');
       return;
     }
     addItem({ menu_item_id: item.id, name: item.name, base_price: item.base_price, selected_options: selectedOptions });

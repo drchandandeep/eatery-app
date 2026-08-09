@@ -7,6 +7,7 @@ const db = require('../db/database');
 const { requireAuth, JWT_SECRET } = require('../middleware/auth');
 const { haversineKm, isValidCoordinate } = require('../utils/geo');
 const { effectiveStoreStatus: effectiveStatus } = require('../utils/subscription');
+const { MAX_SERVICE_RADIUS_KM } = require('../utils/config');
 
 const router = express.Router();
 
@@ -53,7 +54,7 @@ router.post('/signup', (req, res) => {
   }
 
   const distanceKm = haversineKm(Number(address.lat), Number(address.lng), store.lat, store.lng);
-  const allowedRadius = Math.min(store.service_radius_km, 6);
+  const allowedRadius = Math.min(store.service_radius_km, MAX_SERVICE_RADIUS_KM);
   if (distanceKm > allowedRadius) {
     return res.status(403).json({
       error: `This address is ${distanceKm.toFixed(1)}km from ${store.name}, which is outside its ${allowedRadius}km service area.`,

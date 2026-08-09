@@ -7,10 +7,10 @@ const db = require('../db/database');
 const { requireAuth, requireStoreAdmin, JWT_SECRET } = require('../middleware/auth');
 const { haversineKm, isValidCoordinate } = require('../utils/geo');
 const { effectiveStoreStatus: effectiveStatus } = require('../utils/subscription');
+const { MIN_SERVICE_RADIUS_KM, MAX_SERVICE_RADIUS_KM, DEFAULT_SERVICE_RADIUS_KM } = require('../utils/config');
 
 const router = express.Router();
 
-const MAX_SERVICE_RADIUS_KM = 6;
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 // Fields that describe "who this store's account is" and "where the store
@@ -99,7 +99,7 @@ router.post('/register', (req, res) => {
       `INSERT INTO stores
         (id, name, owner_email, address_line, city, zip, lat, lng, service_radius_km, subscription_status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive')`
-    ).run(storeId, store_name, normalizedEmail, address_line, city || null, zip || null, Number(lat), Number(lng), MAX_SERVICE_RADIUS_KM);
+    ).run(storeId, store_name, normalizedEmail, address_line, city || null, zip || null, Number(lat), Number(lng), DEFAULT_SERVICE_RADIUS_KM);
 
     db.prepare(
       `INSERT INTO users (id, name, email, phone, password_hash, role, store_id)
@@ -120,7 +120,7 @@ router.post('/register', (req, res) => {
   });
 });
 
-// GET /api/stores/nearby?lat=&lng=&radius_km=6
+// GET /api/stores/nearby?lat=&lng=&radius_km=10
 // Public lookup used by the customer signup screen: only stores with an
 // active subscription and within range are eligible for new signups.
 router.get('/nearby', (req, res) => {
@@ -167,8 +167,10 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
   if (typeof req.body.name === 'string' && req.body.name.trim()) updates.name = req.body.name.trim();
   if (req.body.service_radius_km != null) {
     const r = Number(req.body.service_radius_km);
-    if (!Number.isFinite(r) || r <= 0 || r > MAX_SERVICE_RADIUS_KM) {
-      return res.status(400).json({ error: `service_radius_km must be between 0 and ${MAX_SERVICE_RADIUS_KM}` });
+    if (!Number.isFinite(r) || r < MIN_SERVICE_RADIUS_KM || r > MAX_SERVICE_RADIUS_KM) {
+      return res.status(400).json({
+        error: `service_radius_km must be between ${MIN_SERVICE_RADIUS_KM} and ${MAX_SERVICE_RADIUS_KM}`,
+      });
     }
     updates.service_radius_km = r;
   }

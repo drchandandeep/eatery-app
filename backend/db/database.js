@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS stores (
   zip TEXT,
   lat REAL NOT NULL,
   lng REAL NOT NULL,
-  service_radius_km REAL NOT NULL DEFAULT 6,   -- customers must be within this to sign up / order (max 6)
+  service_radius_km REAL NOT NULL DEFAULT 7,   -- customers must be within this to sign up / order (range 5-10, see backend/utils/config.js)
   annual_fee REAL NOT NULL DEFAULT 499.00,
   subscription_status TEXT NOT NULL DEFAULT 'inactive', -- 'inactive' | 'active' | 'expired'
   subscription_started_at TEXT,

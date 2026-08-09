@@ -1,10 +1,11 @@
 // screens/CheckoutScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import Button from '../components/Button';
 import { useCart } from '../context/CartContext';
 import { api } from '../api/client';
+import { showAlert } from '../utils/alert';
 
 const TAX_RATE = 0.08;
 const DELIVERY_FEE = 2.99;
@@ -25,7 +26,7 @@ export default function CheckoutScreen({ navigation }) {
 
   async function handlePlaceOrder() {
     if (!address.trim()) {
-      Alert.alert('Delivery address needed', 'Please add where we should deliver your order.');
+      showAlert('Delivery address needed', 'Please add where we should deliver your order.');
       return;
     }
     setPlacing(true);
@@ -42,7 +43,7 @@ export default function CheckoutScreen({ navigation }) {
       clearCart();
       navigation.replace('OrderTracking', { orderId: order.id });
     } catch (err) {
-      Alert.alert('Could not place order', err.message);
+      showAlert('Could not place order', err.message);
     } finally {
       setPlacing(false);
     }

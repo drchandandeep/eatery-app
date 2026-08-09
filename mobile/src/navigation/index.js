@@ -20,6 +20,7 @@ import OrderHistoryScreen from '../screens/OrderHistoryScreen';
 import AccountScreen from '../screens/AccountScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import AdminOrdersScreen from '../screens/AdminOrdersScreen';
+import AdminMenuScreen from '../screens/AdminMenuScreen';
 
 const AuthStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
@@ -85,6 +86,7 @@ function AppStack() {
       <RootStack.Screen name="Checkout" component={CheckoutScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="OrderTracking" component={OrderTrackingScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AdminOrders" component={AdminOrdersScreen} options={{ headerShown: false }} />
+      <RootStack.Screen name="AdminMenu" component={AdminMenuScreen} options={{ headerShown: false }} />
     </RootStack.Navigator>
   );
 }

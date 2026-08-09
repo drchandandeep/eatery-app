@@ -1,9 +1,10 @@
 // screens/LoginScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
+import { showAlert } from '../utils/alert';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
@@ -16,7 +17,7 @@ export default function LoginScreen({ navigation }) {
     try {
       await login(email.trim(), password);
     } catch (err) {
-      Alert.alert('Login failed', err.message);
+      showAlert('Login failed', err.message);
     } finally {
       setLoading(false);
     }

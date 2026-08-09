@@ -1,0 +1,35 @@
+{
+  "name": "eatery-app",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+
+  // Ports the app needs reachable from outside the container:
+  // 4000        -> backend API
+  // 8081        -> Expo Metro bundler
+  // 19000-19002 -> Expo dev tools / legacy tunnel ports
+  "forwardPorts": [4000, 8081, 19000, 19001, 19002],
+  "portsAttributes": {
+    "4000": {
+      "label": "Backend API",
+      "visibility": "public",
+      "onAutoForward": "notify"
+    },
+    "8081": {
+      "label": "Expo Metro",
+      "visibility": "public",
+      "onAutoForward": "silent"
+    }
+  },
+
+  // Installs both apps' dependencies as soon as the Codespace is created.
+  "postCreateCommand": "cd backend && npm install && cp -n .env.example .env && cd ../mobile && npm install",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "msjsdiag.vscode-react-native"
+      ]
+    }
+  }
+}

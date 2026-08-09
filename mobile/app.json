@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Eatery",
+    "slug": "eatery-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#171512"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.eatery"
+    },
+    "android": {
+      "package": "com.yourcompany.eatery",
+      "adaptiveIcon": {
+        "backgroundColor": "#171512"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

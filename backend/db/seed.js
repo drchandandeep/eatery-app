@@ -271,7 +271,7 @@ function run() {
   console.log('Seed complete.');
   console.log('Store admin login -> email: owner@kahumbo.app     password: admin123');
   console.log('Demo customer      -> email: customer@kahumbo.app  password: customer123');
-  console.log(`Store location: lat 39.7817, lng -89.6501 (service radius 7km)`);
+  console.log(`Store location: lat 30.6425, lng 76.8173, (service radius 7km)`);
 }
 
 run();

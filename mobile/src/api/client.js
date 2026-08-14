@@ -3,7 +3,7 @@
 // While developing locally with Expo Go on a physical device, use your
 // computer's LAN IP instead of localhost (e.g. http://192.168.1.20:4000).
 
-export const BASE_URL = 'http://localhost:4000/api';
+export const BASE_URL = 'https://kahumbo.onrender.com/api';
 
 let authToken = null;
 export function setAuthToken(token) {

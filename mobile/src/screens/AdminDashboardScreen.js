@@ -92,7 +92,7 @@ export default function AdminDashboardScreen({ navigation }) {
           <View style={styles.grid}>
             <StatCard label="Active orders" value={stats?.activeOrders ?? '--'} />
             <StatCard label="Total orders" value={stats?.totalOrders ?? '--'} />
-            <StatCard label="Revenue" value={stats ? `$${(stats.revenue || 0).toFixed(2)}` : '--'} wide />
+            <StatCard label="Revenue" value={stats ? `\u20b9${Math.round(stats.revenue || 0)}` : '--'} wide />
           </View>
 
           <Text style={[type.h2, { marginTop: spacing(6), marginBottom: spacing(2) }]}>Top items</Text>
@@ -140,7 +140,7 @@ function SubscriptionCard({ store, active, remainingDays, expiringSoon, subscrib
           : 'Not currently active -- customers can\u2019t see or order from this store.'}
       </Text>
       <Text style={[type.bodyMuted, { marginTop: spacing(1) }]}>
-        ${store.annual_fee?.toFixed ? store.annual_fee.toFixed(2) : store.annual_fee} / year {'\u00b7'} customers always order for free
+        ₹{Math.round(store.annual_fee)} / year {'\u00b7'} customers always order for free
       </Text>
 
       {(!active || expiringSoon) && (

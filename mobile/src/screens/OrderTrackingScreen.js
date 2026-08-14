@@ -50,13 +50,13 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {order.items?.map((it) => (
           <View key={it.id} style={styles.itemRow}>
             <Text style={type.body}>{it.quantity}× {it.name}</Text>
-            <Text style={type.bodyMuted}>${(it.unit_price * it.quantity).toFixed(2)}</Text>
+            <Text style={type.bodyMuted}>₹{Math.round(it.unit_price * it.quantity)}</Text>
           </View>
         ))}
         <View style={styles.divider} />
         <View style={styles.itemRow}>
           <Text style={type.h2}>Total</Text>
-          <Text style={type.h2}>${order.total.toFixed(2)}</Text>
+          <Text style={type.h2}>₹{Math.round(order.total)}</Text>
         </View>
       </View>
 

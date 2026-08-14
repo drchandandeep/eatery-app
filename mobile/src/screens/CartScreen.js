@@ -36,7 +36,7 @@ export default function CartScreen({ navigation }) {
                   {line.selected_options.map((o) => o.choice).join(', ')}
                 </Text>
               )}
-              <Text style={type.price}>${(line.unit_price * line.quantity).toFixed(2)}</Text>
+              <Text style={type.price}>₹{Math.round(line.unit_price * line.quantity)}</Text>
             </View>
             <View style={styles.qtyControl}>
               <Pressable style={styles.qtyBtn} onPress={() => updateQuantity(line.key, line.quantity - 1)}>
@@ -56,7 +56,7 @@ export default function CartScreen({ navigation }) {
       <View style={styles.footer}>
         <View style={styles.subtotalRow}>
           <Text style={type.h2}>Subtotal</Text>
-          <Text style={type.h2}>${subtotal.toFixed(2)}</Text>
+          <Text style={type.h2}>₹{Math.round(subtotal)}</Text>
         </View>
         <Button title="Go to checkout" onPress={() => navigation.navigate('Checkout')} style={{ marginTop: spacing(3) }} />
       </View>

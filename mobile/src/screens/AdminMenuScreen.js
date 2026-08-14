@@ -282,7 +282,7 @@ function ItemRow({ item, editing, editForm, setEditForm, onStartEdit, onCancelEd
           {item.name} {!item.is_available && '(hidden)'}
         </Text>
         {!!item.description && <Text style={type.caption}>{item.description}</Text>}
-        <Text style={type.price}>${Number(item.base_price).toFixed(2)}</Text>
+        <Text style={type.price}>₹{Math.round(Number(item.base_price))}</Text>
       </View>
       <View style={styles.itemActions}>
         <View style={{ alignItems: 'center' }}>

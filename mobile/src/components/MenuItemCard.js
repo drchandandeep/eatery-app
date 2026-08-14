@@ -19,7 +19,7 @@ export default function MenuItemCard({ item, onPress }) {
       <View style={styles.info}>
         <Text style={type.h2} numberOfLines={1}>{item.name}</Text>
         <Text style={[type.bodyMuted, styles.desc]} numberOfLines={2}>{item.description}</Text>
-        <Text style={type.price}>${item.base_price.toFixed(2)}</Text>
+        <Text style={type.price}>₹{Math.round(item.base_price)}</Text>
       </View>
     </Pressable>
   );

@@ -109,7 +109,7 @@ export default function ItemDetailScreen({ route, navigation }) {
                     {isSelected && <View style={styles.radioDot} />}
                   </View>
                   <Text style={[type.body, { flex: 1 }]}>{choice.name}</Text>
-                  {choice.price_delta > 0 && <Text style={type.bodyMuted}>+${choice.price_delta.toFixed(2)}</Text>}
+                  {choice.price_delta > 0 && <Text style={type.bodyMuted}>+₹{Math.round(choice.price_delta)}</Text>}
                 </Pressable>
               );
             })}
@@ -118,7 +118,7 @@ export default function ItemDetailScreen({ route, navigation }) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Text style={styles.footerPrice}>${totalPrice.toFixed(2)}</Text>
+        <Text style={styles.footerPrice}>₹{Math.round(totalPrice)}</Text>
         <Button title="Add to cart" onPress={handleAdd} style={{ flex: 1, marginLeft: spacing(4) }} />
       </View>
     </View>

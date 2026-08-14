@@ -62,7 +62,7 @@ export default function AdminOrdersScreen() {
           return (
             <View style={styles.card}>
               <View style={{ flex: 1 }}>
-                <Text style={type.h2}>#{item.id.slice(0, 6).toUpperCase()} · ${item.total.toFixed(2)}</Text>
+                <Text style={type.h2}>#{item.id.slice(0, 6).toUpperCase()} · ₹{Math.round(item.total)}</Text>
                 <Text style={type.bodyMuted}>{item.address_line}</Text>
                 <Text style={styles.status}>{STATUS_LABEL[item.status]}</Text>
               </View>

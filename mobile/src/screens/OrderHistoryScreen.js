@@ -47,7 +47,7 @@ export default function OrderHistoryScreen({ navigation }) {
               <Text style={type.bodyMuted}>{new Date(item.created_at).toLocaleString()}</Text>
             </View>
             <View style={styles.right}>
-              <Text style={type.price}>${item.total.toFixed(2)}</Text>
+              <Text style={type.price}>₹{Math.round(item.total)}</Text>
               <Text style={styles.status}>{STATUS_LABEL[item.status] || item.status}</Text>
             </View>
           </Pressable>

@@ -166,7 +166,7 @@ machine pointed at that deployed backend URL.
 | Menu browsing by category, scoped per store | `MenuScreen` + `GET /api/menu?store_id=` |
 | Item customization (size, crust, toppings, etc.) | `ItemDetailScreen` + `option_groups`/`option_choices` tables |
 | Cart | `CartContext` (client-side, submitted at checkout) |
-| Checkout & payment method selection | `CheckoutScreen` + `POST /api/orders` |
+| Checkout & payment (Razorpay: UPI/netbanking/cards, or cash on delivery) | `CheckoutScreen` + `POST /api/payments/create-order`, `/api/payments/verify-and-place-order`, `POST /api/orders` (cash) |
 | Live order tracking | `OrderTrackingScreen` (polls every 5s) + status timeline |
 | User accounts, signup/login | `AuthContext` + JWT auth on the backend |
 | Order history | `OrderHistoryScreen` + `GET /api/orders` |
@@ -176,12 +176,21 @@ machine pointed at that deployed backend URL.
 
 ## Notes & next steps
 
-- **Store subscription billing** is currently a mock (`POST /api/stores/subscribe`
+- **Customer payments** go through Razorpay for real now (UPI, netbanking,
+  cards) or cash on delivery. Add `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`
+  to `backend/.env` (Test Mode keys are free and instant, no KYC needed --
+  see dashboard.razorpay.com → Settings → API Keys) and run `npm install`
+  in both `backend/` and `mobile/` to pick up the `razorpay` and
+  `react-native-webview` packages. On web, checkout uses Razorpay's JS SDK
+  directly; on iOS/Android it runs inside a WebView bridge (compatible with
+  plain Expo Go — no custom dev client needed). Payments are verified
+  server-side via HMAC signature before an order is ever written to the
+  database — the client's word alone is never trusted.
+- **Store subscription billing** is still a mock (`POST /api/stores/subscribe`
   just flips the store to active and sets a 1-year expiry) — no real payment
-  processor is wired in. For production, integrate Stripe Billing (or a
-  local equivalent) server-side before activating a subscription for real.
-- **Payments** for customer orders are currently just a method *selection*
-  (card/cash/wallet) — no real payment processor is wired in either.
+  processor is wired in for this one yet. For production, integrate Razorpay
+  Subscriptions (or Stripe Billing) server-side before activating a store
+  subscription for real.
 - **Location permission**: the signup and store-registration screens need
   device location access (`expo-location`) to capture coordinates for the
   service-radius check. Run `npm install` in `mobile/` after pulling these

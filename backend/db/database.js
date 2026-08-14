@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS stores (
   lat REAL NOT NULL,
   lng REAL NOT NULL,
   service_radius_km REAL NOT NULL DEFAULT 7,   -- customers must be within this to sign up / order (range 5-10, see backend/utils/config.js)
-  annual_fee REAL NOT NULL DEFAULT 499.00,
+  annual_fee REAL NOT NULL DEFAULT 50000.00,
   subscription_status TEXT NOT NULL DEFAULT 'inactive', -- 'inactive' | 'active' | 'expired'
   subscription_started_at TEXT,
   subscription_expires_at TEXT,
@@ -112,7 +112,10 @@ CREATE TABLE IF NOT EXISTS orders (
   tax REAL NOT NULL DEFAULT 0,
   total REAL NOT NULL,
   address_line TEXT,
-  payment_method TEXT DEFAULT 'card',
+  payment_method TEXT DEFAULT 'cash', -- 'cash' (pay on delivery) | 'online' (Razorpay)
+  payment_status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'paid'
+  payment_gateway TEXT, -- e.g. 'razorpay', null for cash
+  payment_ref TEXT, -- gateway payment id, for reconciliation/refunds
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -134,5 +137,21 @@ CREATE TABLE IF NOT EXISTS order_status_history (
   changed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `);
+
+// Safe, idempotent migration: databases created before payment tracking was
+// added won't have these columns yet. ALTER TABLE ADD COLUMN throws if the
+// column already exists -- that's expected on every startup after the first
+// and is silently ignored, so this is harmless to run every time.
+for (const stmt of [
+  "ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'pending'",
+  'ALTER TABLE orders ADD COLUMN payment_gateway TEXT',
+  'ALTER TABLE orders ADD COLUMN payment_ref TEXT',
+]) {
+  try {
+    db.exec(stmt);
+  } catch (err) {
+    // Column already exists -- fine, nothing to do.
+  }
+}
 
 module.exports = db;

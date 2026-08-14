@@ -50,6 +50,10 @@ export const api = {
   getOrders: () => request('/orders'),
   getOrder: (id) => request(`/orders/${id}`),
 
+  // payments (Razorpay -- online orders only; cash orders use placeOrder above)
+  createPaymentOrder: (payload) => request('/payments/create-order', { method: 'POST', body: payload }),
+  verifyAndPlaceOrder: (payload) => request('/payments/verify-and-place-order', { method: 'POST', body: payload }),
+
   // admin (store_admin)
   adminStats: () => request('/admin/stats'),
   adminOrders: (status) => request(`/admin/orders${status ? `?status=${status}` : ''}`),

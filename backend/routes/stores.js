@@ -11,8 +11,6 @@ const { MIN_SERVICE_RADIUS_KM, MAX_SERVICE_RADIUS_KM, DEFAULT_SERVICE_RADIUS_KM 
 
 const router = express.Router();
 
-const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
-
 // Fields that describe "who this store's account is" and "where the store
 // physically is". Per product requirement, once a store registers with an
 // email + address, that combo can never change -- otherwise one paying
@@ -185,32 +183,70 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
   res.json({ store: publicStore(db.prepare('SELECT * FROM stores WHERE id = ?').get(store.id)) });
 });
 
-// POST /api/stores/subscribe  (store_admin only)
-// Mock annual billing: in production this would confirm a real payment
-// (e.g. via Stripe Billing) before flipping the subscription on. Renewing
-// before expiry extends from the current expiry date rather than from
-// "now", so early renewals aren't wasted.
-router.post('/subscribe', requireAuth, requireStoreAdmin, (req, res) => {
+// ---- Annual subscription payment (own-QR + manual approval) ----
+//
+// There is no automated payment gateway for the subscription -- the store
+// owner pays via the platform's UPI QR code (see GET /subscription-qr) and
+// uploads a screenshot as evidence. A platform_admin then reviews it and
+// approves/rejects (see routes/platform.js). This keeps things honest: an
+// uploaded image can't be automatically verified as a real, successful
+// payment of the right amount, so a human always makes the final call.
+
+// GET /api/stores/subscription-qr  (any authenticated store_admin)
+// Returns the platform's own UPI QR code image + UPI id, so the store owner
+// knows where to pay their annual fee.
+router.get('/subscription-qr', requireAuth, requireStoreAdmin, (req, res) => {
+  const qr = db.prepare("SELECT value FROM platform_settings WHERE key = 'qr_image_base64'").get();
+  const upiId = db.prepare("SELECT value FROM platform_settings WHERE key = 'upi_id'").get();
+  res.json({
+    qr_image_base64: qr?.value || null,
+    upi_id: upiId?.value || null,
+  });
+});
+
+// POST /api/stores/subscription/submit-proof  (store_admin only)
+// body: { screenshot_base64, note? }
+// Creates a pending review request. The store's subscription_status is set
+// to 'pending_review' so the dashboard can show "awaiting approval" instead
+// of a plain "inactive" -- it does NOT activate anything by itself.
+router.post('/subscription/submit-proof', requireAuth, requireStoreAdmin, (req, res) => {
+  const { screenshot_base64, note } = req.body;
+  if (!screenshot_base64) {
+    return res.status(400).json({ error: 'screenshot_base64 is required -- upload a screenshot of your payment' });
+  }
+
   const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.user.store_id);
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
-  const now = new Date();
-  const currentExpiry = store.subscription_expires_at ? new Date(store.subscription_expires_at) : null;
-  const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
-  const newExpiry = new Date(base.getTime() + ONE_YEAR_MS);
+  const requestId = nanoid(12);
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO subscription_payment_requests (id, store_id, screenshot_base64, note, amount, status)
+       VALUES (?, ?, ?, ?, ?, 'pending')`
+    ).run(requestId, store.id, screenshot_base64, note || null, store.annual_fee);
 
-  db.prepare(
-    `UPDATE stores
-     SET subscription_status = 'active',
-         subscription_started_at = COALESCE(subscription_started_at, ?),
-         subscription_expires_at = ?
-     WHERE id = ?`
-  ).run(now.toISOString(), newExpiry.toISOString(), store.id);
-
-  res.json({
-    store: publicStore(db.prepare('SELECT * FROM stores WHERE id = ?').get(store.id)),
-    message: `Subscription active until ${newExpiry.toISOString().slice(0, 10)}. Ordering is free for your customers.`,
+    // Only move a fresh/expired store into "pending_review" -- don't
+    // downgrade a store that's already active (e.g. renewing early).
+    if (store.subscription_status !== 'active') {
+      db.prepare("UPDATE stores SET subscription_status = 'pending_review' WHERE id = ?").run(store.id);
+    }
   });
+  tx();
+
+  res.status(201).json({
+    request: db.prepare('SELECT * FROM subscription_payment_requests WHERE id = ?').get(requestId),
+    store: publicStore(db.prepare('SELECT * FROM stores WHERE id = ?').get(store.id)),
+    message: 'Payment proof submitted. Your subscription will activate once it\u2019s reviewed and approved.',
+  });
+});
+
+// GET /api/stores/subscription/requests  (store_admin only)
+// Lets the store owner see the status of their own submitted proofs.
+router.get('/subscription/requests', requireAuth, requireStoreAdmin, (req, res) => {
+  const requests = db
+    .prepare('SELECT id, note, amount, status, created_at, reviewed_at FROM subscription_payment_requests WHERE store_id = ? ORDER BY created_at DESC')
+    .all(req.user.store_id);
+  res.json({ requests });
 });
 
 module.exports = router;

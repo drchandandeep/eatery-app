@@ -52,4 +52,14 @@ function requireActiveSubscription(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireStoreAdmin, requireActiveSubscription, JWT_SECRET };
+// Platform owner (you) -- reviews subscription payment proofs, manages the
+// platform's own payment QR code. Separate from store_admin: a platform
+// admin doesn't belong to any one store.
+function requirePlatformAdmin(req, res, next) {
+  if (req.user?.role !== 'platform_admin') {
+    return res.status(403).json({ error: 'Platform admin access required' });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireStoreAdmin, requireActiveSubscription, requirePlatformAdmin, JWT_SECRET };

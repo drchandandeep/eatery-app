@@ -31,7 +31,7 @@ async function request(path, { method = 'GET', body, token } = {}) {
 export const api = {
   // auth (customers)
   signup: (payload) => request('/auth/signup', { method: 'POST', body: payload }),
-  login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
+  login: (identifier, password) => request('/auth/login', { method: 'POST', body: { identifier, password } }),
   me: (token) => request('/auth/me', { token }),
 
   // stores
@@ -39,7 +39,11 @@ export const api = {
     request(`/stores/nearby?lat=${lat}&lng=${lng}&radius_km=${radiusKm}`),
   registerStore: (payload) => request('/stores/register', { method: 'POST', body: payload }),
   myStore: () => request('/stores/me'),
-  subscribeStore: () => request('/stores/subscribe', { method: 'POST' }),
+
+  // subscription (own-QR + manual approval, not a payment gateway)
+  getSubscriptionQr: () => request('/stores/subscription-qr'),
+  submitSubscriptionProof: (payload) => request('/stores/subscription/submit-proof', { method: 'POST', body: payload }),
+  mySubscriptionRequests: () => request('/stores/subscription/requests'),
 
   // menu
   getMenu: (storeId) => request(storeId ? `/menu?store_id=${storeId}` : '/menu'),
@@ -57,8 +61,8 @@ export const api = {
   // admin (store_admin)
   adminStats: () => request('/admin/stats'),
   adminOrders: (status) => request(`/admin/orders${status ? `?status=${status}` : ''}`),
-  adminUpdateOrderStatus: (id, status) =>
-    request(`/admin/orders/${id}/status`, { method: 'PATCH', body: { status } }),
+  adminUpdateOrderStatus: (id, status, etaMinutes) =>
+    request(`/admin/orders/${id}/status`, { method: 'PATCH', body: { status, eta_minutes: etaMinutes } }),
 
   // admin menu management (store_admin)
   adminGetMenu: () => request('/admin/menu'),
@@ -68,4 +72,10 @@ export const api = {
   adminCreateCategory: (payload) => request('/admin/categories', { method: 'POST', body: payload }),
   adminUpdateCategory: (id, payload) => request(`/admin/categories/${id}`, { method: 'PATCH', body: payload }),
   adminDeleteCategory: (id) => request(`/admin/categories/${id}`, { method: 'DELETE' }),
+
+  // platform admin (reviewing subscription payment proofs, platform QR)
+  platformSubscriptionRequests: (status = 'pending') => request(`/platform/subscription-requests?status=${status}`),
+  platformApproveRequest: (id) => request(`/platform/subscription-requests/${id}/approve`, { method: 'POST' }),
+  platformRejectRequest: (id, reason) => request(`/platform/subscription-requests/${id}/reject`, { method: 'POST', body: { reason } }),
+  platformSetQrCode: (payload) => request('/platform/qr-code', { method: 'POST', body: payload }),
 };

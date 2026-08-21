@@ -1,6 +1,6 @@
 // screens/AdminOrdersScreen.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 
@@ -24,6 +24,7 @@ export default function AdminOrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  const [etaDrafts, setEtaDrafts] = useState({}); // orderId -> string being typed
 
   const load = useCallback(() => {
     api.adminOrders().then(({ orders: o }) => setOrders(o)).finally(() => {
@@ -39,7 +40,9 @@ export default function AdminOrdersScreen() {
     if (!next) return;
     setUpdatingId(order.id);
     try {
-      await api.adminUpdateOrderStatus(order.id, next);
+      const etaMinutes = etaDrafts[order.id];
+      await api.adminUpdateOrderStatus(order.id, next, etaMinutes ? Number(etaMinutes) : undefined);
+      setEtaDrafts((d) => ({ ...d, [order.id]: '' }));
       load();
     } finally {
       setUpdatingId(null);
@@ -61,21 +64,35 @@ export default function AdminOrdersScreen() {
           const next = NEXT_STATUS[item.status];
           return (
             <View style={styles.card}>
-              <View style={{ flex: 1 }}>
-                <Text style={type.h2}>#{item.id.slice(0, 6).toUpperCase()} · ₹{Math.round(item.total)}</Text>
-                <Text style={type.bodyMuted}>{item.address_line}</Text>
-                <Text style={styles.status}>{STATUS_LABEL[item.status]}</Text>
-              </View>
+              <Text style={type.h2}>#{item.id.slice(0, 6).toUpperCase()} · ₹{Math.round(item.total)}</Text>
+              <Text style={type.bodyMuted}>{item.address_line}</Text>
+              <Text style={styles.status}>
+                {STATUS_LABEL[item.status]}
+                {item.estimated_delivery_minutes != null ? ` · ETA ${item.estimated_delivery_minutes} min` : ''}
+              </Text>
+
               {next && (
-                <Pressable
-                  style={styles.advanceBtn}
-                  onPress={() => advance(item)}
-                  disabled={updatingId === item.id}
-                >
-                  <Text style={styles.advanceBtnText}>
-                    {updatingId === item.id ? 'Updating…' : `Mark ${STATUS_LABEL[next]}`}
-                  </Text>
-                </Pressable>
+                <>
+                  <View style={styles.etaRow}>
+                    <TextInput
+                      style={styles.etaInput}
+                      placeholder="ETA in minutes (optional)"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="number-pad"
+                      value={etaDrafts[item.id] || ''}
+                      onChangeText={(v) => setEtaDrafts((d) => ({ ...d, [item.id]: v.replace(/[^0-9]/g, '') }))}
+                    />
+                  </View>
+                  <Pressable
+                    style={styles.advanceBtn}
+                    onPress={() => advance(item)}
+                    disabled={updatingId === item.id}
+                  >
+                    <Text style={styles.advanceBtnText}>
+                      {updatingId === item.id ? 'Updating…' : `Mark ${STATUS_LABEL[next]}`}
+                    </Text>
+                  </Pressable>
+                </>
               )}
             </View>
           );
@@ -99,6 +116,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   status: { ...type.caption, color: colors.accentSoft, marginTop: spacing(1) },
-  advanceBtn: { marginTop: spacing(3), backgroundColor: colors.accent, borderRadius: radius.sm, paddingVertical: spacing(2.5), alignItems: 'center' },
+  etaRow: { marginTop: spacing(3) },
+  etaInput: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing(3),
+    paddingVertical: spacing(2),
+    color: colors.text,
+    fontSize: 13,
+  },
+  advanceBtn: { marginTop: spacing(2), backgroundColor: colors.accent, borderRadius: radius.sm, paddingVertical: spacing(2.5), alignItems: 'center' },
   advanceBtnText: { color: colors.white, fontWeight: '700', fontSize: 13 },
 });
+

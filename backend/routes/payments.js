@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const db = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
 const { effectiveStoreStatus } = require('../utils/subscription');
+const { sendOrderConfirmationEmail } = require('../utils/email');
 const orders = require('./orders');
 
 const router = express.Router();
@@ -146,6 +147,9 @@ router.post('/verify-and-place-order', requireAuth, (req, res) => {
     paymentGateway: 'razorpay',
     paymentRef: razorpay_payment_id,
   });
+
+  const store = db.prepare('SELECT name FROM stores WHERE id = ?').get(req.user.store_id);
+  sendOrderConfirmationEmail(req.user.email, order, store?.name).catch(() => {});
 
   res.status(201).json({ order });
 });

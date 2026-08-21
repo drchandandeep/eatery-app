@@ -62,21 +62,28 @@ export default function MenuScreen({ navigation }) {
         </Pressable>
       </View>
 
-      <FlatList
-        horizontal
-        data={categories}
-        keyExtractor={(c) => c.id}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsRow}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => setActiveCategory(item.id)}
-            style={[styles.tab, activeCategory === item.id && styles.tabActive]}
-          >
-            <Text style={[styles.tabText, activeCategory === item.id && styles.tabTextActive]}>{item.name}</Text>
-          </Pressable>
-        )}
-      />
+      <View style={styles.tabsWrap}>
+        <FlatList
+          horizontal
+          data={categories}
+          keyExtractor={(c) => c.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsRow}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => setActiveCategory(item.id)}
+              style={[styles.tab, activeCategory === item.id && styles.tabActive]}
+            >
+              <Text
+                style={[styles.tabText, activeCategory === item.id && styles.tabTextActive]}
+                numberOfLines={1}
+              >
+                {item.name}
+              </Text>
+            </Pressable>
+          )}
+        />
+      </View>
 
       <FlatList
         data={activeItems}
@@ -105,8 +112,10 @@ const styles = StyleSheet.create({
   },
   cartBtn: { backgroundColor: colors.accent, paddingHorizontal: spacing(4), paddingVertical: spacing(2.5), borderRadius: radius.pill },
   cartBtnText: { color: colors.white, fontWeight: '700', fontSize: 13 },
-  tabsRow: { paddingHorizontal: spacing(5), paddingBottom: spacing(3), gap: spacing(2) },
+  tabsWrap: { paddingBottom: spacing(3) },
+  tabsRow: { paddingHorizontal: spacing(5), paddingRight: spacing(10), gap: spacing(2), alignItems: 'center' },
   tab: {
+    flexShrink: 0,
     paddingHorizontal: spacing(4),
     paddingVertical: spacing(2.5),
     borderRadius: radius.pill,
@@ -114,9 +123,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginRight: spacing(2),
+    minHeight: 40,
+    justifyContent: 'center',
   },
   tabActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  tabText: { color: colors.textMuted, fontWeight: '600', fontSize: 13 },
+  tabText: { color: colors.textMuted, fontWeight: '600', fontSize: 13, lineHeight: 16 },
   tabTextActive: { color: colors.white },
   list: { paddingHorizontal: spacing(5), paddingBottom: spacing(10) },
 });

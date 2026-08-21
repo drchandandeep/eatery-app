@@ -4,7 +4,6 @@ import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl }
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
-import { showAlert } from '../utils/alert';
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -17,7 +16,6 @@ export default function AdminDashboardScreen({ navigation }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
 
   const load = useCallback(() => {
     // myStore() always succeeds (subscription-independent) so we can show
@@ -42,23 +40,10 @@ export default function AdminDashboardScreen({ navigation }) {
     load();
   }, [load]);
 
-  async function handleSubscribe() {
-    setSubscribing(true);
-    try {
-      const { store: s, message } = await api.subscribeStore();
-      setStore(s);
-      showAlert('Subscription active', message);
-      load();
-    } catch (err) {
-      showAlert('Payment failed', err.message);
-    } finally {
-      setSubscribing(false);
-    }
-  }
-
   if (loading) return <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /></View>;
 
   const active = store?.subscription_status === 'active';
+  const pendingReview = store?.subscription_status === 'pending_review';
   const remainingDays = daysUntil(store?.subscription_expires_at);
   const expiringSoon = active && remainingDays != null && remainingDays <= 30;
 
@@ -74,10 +59,10 @@ export default function AdminDashboardScreen({ navigation }) {
       <SubscriptionCard
         store={store}
         active={active}
+        pendingReview={pendingReview}
         remainingDays={remainingDays}
         expiringSoon={expiringSoon}
-        subscribing={subscribing}
-        onSubscribe={handleSubscribe}
+        onPay={() => navigation.navigate('SubscriptionPayment')}
       />
 
       {!active ? (
@@ -123,33 +108,39 @@ export default function AdminDashboardScreen({ navigation }) {
   );
 }
 
-function SubscriptionCard({ store, active, remainingDays, expiringSoon, subscribing, onSubscribe }) {
+function SubscriptionCard({ store, active, pendingReview, remainingDays, expiringSoon, onPay }) {
   if (!store) return null;
+  const statusLabel = active ? 'Active' : pendingReview ? 'Pending review' : (store.subscription_status || 'inactive').toUpperCase();
   return (
     <View style={[styles.card, active ? styles.cardOk : styles.cardWarn]}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text style={type.h2}>Annual subscription</Text>
         <View style={[styles.badge, active ? styles.badgeOk : styles.badgeWarn]}>
-          <Text style={styles.badgeText}>{active ? 'Active' : (store.subscription_status || 'inactive').toUpperCase()}</Text>
+          <Text style={styles.badgeText}>{statusLabel}</Text>
         </View>
       </View>
 
       <Text style={[type.bodyMuted, { marginTop: spacing(2) }]}>
         {active
           ? `Renews on ${new Date(store.subscription_expires_at).toDateString()}${remainingDays != null ? ` (${remainingDays} days left)` : ''}`
-          : 'Not currently active -- customers can\u2019t see or order from this store.'}
+          : pendingReview
+          ? "We're reviewing your payment screenshot -- this usually takes a short while."
+          : "Not currently active -- customers can't see or order from this store."}
       </Text>
       <Text style={[type.bodyMuted, { marginTop: spacing(1) }]}>
         ₹{Math.round(store.annual_fee)} / year {'\u00b7'} customers always order for free
       </Text>
 
-      {(!active || expiringSoon) && (
+      {!active && (
         <Button
-          title={subscribing ? 'Processing...' : active ? 'Renew now' : 'Activate subscription'}
-          onPress={onSubscribe}
-          loading={subscribing}
+          title={pendingReview ? 'Submit another payment' : expiringSoon ? 'Renew now' : 'Pay subscription'}
+          variant={pendingReview ? 'outline' : 'primary'}
+          onPress={onPay}
           style={{ marginTop: spacing(4) }}
         />
+      )}
+      {active && expiringSoon && (
+        <Button title="Renew now" onPress={onPay} style={{ marginTop: spacing(4) }} />
       )}
     </View>
   );

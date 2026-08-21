@@ -8,14 +8,14 @@ import { showAlert } from '../utils/alert';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('owner@kahumbo.app');
+  const [identifier, setIdentifier] = useState('owner@kahumbo.app');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      await login(identifier.trim(), password);
     } catch (err) {
       showAlert('Login failed', err.message);
     } finally {
@@ -29,14 +29,13 @@ export default function LoginScreen({ navigation }) {
         <Text style={type.display}>Welcome back</Text>
         <Text style={[type.bodyMuted, { marginBottom: spacing(6) }]}>Sign in to order your favorites</Text>
 
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>Email or phone</Text>
         <TextInput
           style={styles.input}
-          value={email}
-          onChangeText={setEmail}
+          value={identifier}
+          onChangeText={setIdentifier}
           autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="you@example.com"
+          placeholder="you@example.com or phone number"
           placeholderTextColor={colors.textMuted}
         />
 

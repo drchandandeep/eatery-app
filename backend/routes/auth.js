@@ -89,17 +89,27 @@ router.post('/signup', (req, res) => {
 });
 
 // POST /api/auth/login
+// body: { identifier, password }  -- identifier can be an email or a phone
+// number; also accepts { email, password } for backwards compatibility.
+// Looks the account up by whichever one was actually entered.
 router.post('/login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
+  const identifier = (req.body.identifier || req.body.email || '').trim();
+  const { password } = req.body;
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'email/phone and password are required' });
+  }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase().trim());
+  const looksLikeEmail = identifier.includes('@');
+  const user = looksLikeEmail
+    ? db.prepare('SELECT * FROM users WHERE email = ?').get(identifier.toLowerCase())
+    : db.prepare('SELECT * FROM users WHERE phone = ?').get(identifier);
+
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-    return res.status(401).json({ error: 'Invalid email or password' });
+    return res.status(401).json({ error: 'Invalid email/phone or password' });
   }
 
   const token = signToken(user);
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, store_id: user.store_id } });
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, store_id: user.store_id } });
 });
 
 // GET /api/auth/me

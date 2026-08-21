@@ -21,6 +21,8 @@ import AccountScreen from '../screens/AccountScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import AdminOrdersScreen from '../screens/AdminOrdersScreen';
 import AdminMenuScreen from '../screens/AdminMenuScreen';
+import SubscriptionPaymentScreen from '../screens/SubscriptionPaymentScreen';
+import PlatformAdminScreen from '../screens/PlatformAdminScreen';
 
 const AuthStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
@@ -87,6 +89,7 @@ function AppStack() {
       <RootStack.Screen name="OrderTracking" component={OrderTrackingScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AdminOrders" component={AdminOrdersScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AdminMenu" component={AdminMenuScreen} options={{ headerShown: false }} />
+      <RootStack.Screen name="SubscriptionPayment" component={SubscriptionPaymentScreen} options={{ headerShown: false }} />
     </RootStack.Navigator>
   );
 }
@@ -101,6 +104,17 @@ function LoginFlow() {
   );
 }
 
+// The platform_admin role isn't tied to any one store, so it gets its own
+// minimal flow instead of the customer/store_admin tab bar (which assumes a
+// menu, orders, and a specific store to manage).
+function PlatformAdminFlow() {
+  return (
+    <RootStack.Navigator screenOptions={screenOptions}>
+      <RootStack.Screen name="PlatformAdmin" component={PlatformAdminScreen} options={{ headerShown: false }} />
+    </RootStack.Navigator>
+  );
+}
+
 export default function RootNavigator() {
   const { user, loading } = useAuth();
 
@@ -112,5 +126,7 @@ export default function RootNavigator() {
     );
   }
 
-  return <NavigationContainer>{user ? <AppStack /> : <LoginFlow />}</NavigationContainer>;
+  if (!user) return <NavigationContainer><LoginFlow /></NavigationContainer>;
+  if (user.role === 'platform_admin') return <NavigationContainer><PlatformAdminFlow /></NavigationContainer>;
+  return <NavigationContainer><AppStack /></NavigationContainer>;
 }

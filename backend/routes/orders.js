@@ -4,16 +4,18 @@ const { nanoid } = require('nanoid');
 const db = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
 const { effectiveStoreStatus } = require('../utils/subscription');
+const { sendOrderConfirmationEmail } = require('../utils/email');
+const { DELIVERY_FEE } = require('../utils/config');
 
 const router = express.Router();
 
 // India GST for restaurants is commonly 5% (non-AC / composition scheme).
-// Flat delivery fee in rupees. Both live here as the single source of truth
-// -- routes/payments.js imports computeOrderTotals rather than redefining
+// DELIVERY_FEE lives in utils/config.js as the single source of truth --
+// routes/payments.js imports computeOrderTotals rather than redefining
 // these, so the two payment paths (cash and Razorpay) can never disagree on
-// what a cart actually costs.
+// what a cart actually costs, and the mobile app's checkout estimate reads
+// the same number back from the API rather than hardcoding its own copy.
 const TAX_RATE = 0.05;
-const DELIVERY_FEE = 50;
 
 // Recomputes a cart's real price server-side from the store's own menu data
 // -- never trusts any price the client sends. Throws a plain Error with a
@@ -139,6 +141,10 @@ router.post('/', requireAuth, (req, res) => {
     paymentMethod: 'cash',
     paymentStatus: 'pending', // collected on delivery
   });
+
+  // Fire-and-forget: never let a slow/broken mail server delay the response
+  // the customer is waiting on for their order confirmation.
+  sendOrderConfirmationEmail(req.user.email, order, store.name).catch(() => {});
 
   res.status(201).json({ order });
 });

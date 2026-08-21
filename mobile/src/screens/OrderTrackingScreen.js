@@ -42,7 +42,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
       <Text style={[type.bodyMuted, { marginBottom: spacing(6) }]}>Delivering to {order.address_line}</Text>
 
       <View style={styles.card}>
-        <OrderStatusTimeline status={order.status} />
+        <OrderStatusTimeline status={order.status} etaMinutes={order.estimated_delivery_minutes} />
       </View>
 
       <View style={styles.card}>

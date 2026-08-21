@@ -22,17 +22,26 @@ router.get('/orders', (req, res) => {
   res.json({ orders });
 });
 
-// PATCH /api/admin/orders/:id/status  { status }
+// PATCH /api/admin/orders/:id/status  { status, eta_minutes? }
+// eta_minutes is optional -- when provided (e.g. "Preparing, ~20 min"),
+// it's stored alongside the status update and shown to the customer on
+// their live tracking screen as an estimated delivery time.
 router.patch('/orders/:id/status', (req, res) => {
-  const { status } = req.body;
+  const { status, eta_minutes } = req.body;
   if (!VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
   }
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.id, req.user.store_id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
+  const eta = eta_minutes != null && eta_minutes !== '' ? Math.max(0, Number(eta_minutes)) : null;
+
   const tx = db.transaction(() => {
-    db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, order.id);
+    if (eta != null) {
+      db.prepare("UPDATE orders SET status = ?, estimated_delivery_minutes = ?, updated_at = datetime('now') WHERE id = ?").run(status, eta, order.id);
+    } else {
+      db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, order.id);
+    }
     db.prepare('INSERT INTO order_status_history (id, order_id, status) VALUES (?, ?, ?)').run(
       nanoid(12),
       order.id,

@@ -15,7 +15,7 @@ import { openRazorpayWeb } from '../utils/razorpayWeb';
 // backend/routes/orders.js) from the actual cart, so these just need to
 // match that for the estimate to be accurate, not to be trusted for billing.
 const TAX_RATE = 0.05; // India GST for restaurants (non-AC/composition scheme)
-const DELIVERY_FEE = 50; // flat delivery fee in rupees
+const DELIVERY_FEE = 100; // flat delivery fee in rupees -- must match backend/utils/config.js
 
 const PAYMENT_METHODS = [
   { key: 'online', label: 'Pay online (UPI / Card / Netbanking)' },

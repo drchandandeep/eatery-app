@@ -34,8 +34,8 @@ export function AuthProvider({ children }) {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ token: nextToken, user: nextUser }));
   }
 
-  async function login(email, password) {
-    const { token: t, user: u } = await api.login({ email, password });
+  async function login(identifier, password) {
+    const { token: t, user: u } = await api.login(identifier, password);
     await persist(t, u);
   }
 
@@ -57,7 +57,7 @@ export function AuthProvider({ children }) {
 
   // Store owner registration: creates the store (locked email + address)
   // and its store_admin account in one step. Subscription still needs to
-  // be activated separately (see api.subscribeStore).
+  // be paid + approved separately (see SubscriptionPaymentScreen).
   async function registerStore(payload) {
     const { token: t, user: u } = await api.registerStore(payload);
     await persist(t, u);

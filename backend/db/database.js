@@ -136,6 +136,32 @@ CREATE TABLE IF NOT EXISTS order_status_history (
   status TEXT NOT NULL,
   changed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Simple key/value store for platform-wide settings that aren't worth their
+-- own table -- currently just the platform's own UPI QR code (base64 image)
+-- that store owners pay their annual subscription to.
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
+-- A store owner's claim that they've paid their annual subscription,
+-- evidenced by an uploaded payment-screenshot. Nothing here is trusted
+-- automatically -- a platform_admin has to actually look at the screenshot
+-- and approve it (see routes/platform.js) before the store's subscription
+-- is activated. This is the deliberate, honest alternative to a "trust the
+-- image blindly" auto-activation, which would be trivial to fake.
+CREATE TABLE IF NOT EXISTS subscription_payment_requests (
+  id TEXT PRIMARY KEY,
+  store_id TEXT NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  screenshot_base64 TEXT NOT NULL,
+  note TEXT,
+  amount REAL,
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'approved' | 'rejected'
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  reviewed_at TEXT,
+  reviewed_by TEXT
+);
 `);
 
 // Safe, idempotent migration: databases created before payment tracking was
@@ -146,6 +172,8 @@ for (const stmt of [
   "ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'pending'",
   'ALTER TABLE orders ADD COLUMN payment_gateway TEXT',
   'ALTER TABLE orders ADD COLUMN payment_ref TEXT',
+  'ALTER TABLE orders ADD COLUMN estimated_delivery_minutes INTEGER',
+  'ALTER TABLE users ADD COLUMN phone TEXT',
 ]) {
   try {
     db.exec(stmt);

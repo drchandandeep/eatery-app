@@ -160,19 +160,21 @@ machine pointed at that deployed backend URL.
 | Feature | Where |
 |---|---|
 | Store registration (locked email + address) | `StoreRegisterScreen` + `POST /api/stores/register` |
-| Annual store subscription (mock billing) | `AdminDashboardScreen` + `POST /api/stores/subscribe` |
-| Nearby-store lookup (5-6km geofence) | `SignupScreen` + `GET /api/stores/nearby` |
-| Customer signup locked to one store | `SignupScreen` + `POST /api/auth/signup` |
+| Annual store subscription (own-QR + manual approval) | `SubscriptionPaymentScreen` + `POST /api/stores/subscription/submit-proof`, approved via `PlatformAdminScreen` or the `/admin` web page |
+| Nearby-store lookup (5-10km geofence) | `SignupScreen` + `GET /api/stores/nearby` |
+| Customer signup locked to one store, email or phone login | `SignupScreen`, `LoginScreen` + `POST /api/auth/signup`, `POST /api/auth/login` |
 | Menu browsing by category, scoped per store | `MenuScreen` + `GET /api/menu?store_id=` |
 | Item customization (size, crust, toppings, etc.) | `ItemDetailScreen` + `option_groups`/`option_choices` tables |
 | Cart | `CartContext` (client-side, submitted at checkout) |
 | Checkout & payment (Razorpay: UPI/netbanking/cards, or cash on delivery) | `CheckoutScreen` + `POST /api/payments/create-order`, `/api/payments/verify-and-place-order`, `POST /api/orders` (cash) |
-| Live order tracking | `OrderTrackingScreen` (polls every 5s) + status timeline |
+| Order confirmation email | `utils/email.js` (SMTP, optional -- silently skipped if unset) |
+| Live order tracking with ETA | `OrderTrackingScreen` (polls every 5s) + status timeline + `estimated_delivery_minutes` |
 | User accounts, signup/login | `AuthContext` + JWT auth on the backend |
 | Order history | `OrderHistoryScreen` + `GET /api/orders` |
 | Admin dashboard (stats, top items, subscription status) | `AdminDashboardScreen` + `GET /api/admin/stats` |
-| Admin order management (advance status) | `AdminOrdersScreen` + `PATCH /api/admin/orders/:id/status` |
+| Admin order management (advance status, set ETA) | `AdminOrdersScreen` + `PATCH /api/admin/orders/:id/status` |
 | Admin menu management (add/edit/delete items & categories, toggle availability) | `AdminMenuScreen` + `GET/POST/PATCH/DELETE /api/admin/menu` and `/api/admin/categories` |
+| Platform admin: review subscription payments, set platform QR | `PlatformAdminScreen` (mobile) or `/admin` (password-protected web page) + `routes/platform.js` |
 
 ## Notes & next steps
 
@@ -186,11 +188,24 @@ machine pointed at that deployed backend URL.
   plain Expo Go — no custom dev client needed). Payments are verified
   server-side via HMAC signature before an order is ever written to the
   database — the client's word alone is never trusted.
-- **Store subscription billing** is still a mock (`POST /api/stores/subscribe`
-  just flips the store to active and sets a 1-year expiry) — no real payment
-  processor is wired in for this one yet. For production, integrate Razorpay
-  Subscriptions (or Stripe Billing) server-side before activating a store
-  subscription for real.
+- **Store subscription billing** is deliberately *not* automated. A store
+  owner pays the annual fee by scanning the platform's own UPI QR code
+  (`SubscriptionPaymentScreen`), then uploads a screenshot as proof
+  (`POST /api/stores/subscription/submit-proof`). A `platform_admin` account
+  (seeded as `platform@kahumbo.app` / `platform123` -- change this password)
+  reviews it and approves/rejects from either the mobile app's Approvals
+  screen or the `/admin` web page. Nothing auto-activates on upload -- a
+  screenshot alone can't be verified as a real, successful payment, so a
+  human always makes the final call. Set your real QR code from the `/admin`
+  page (Payment QR code section); a plain placeholder image is seeded until
+  you do. This intentionally trades instant activation for zero payment
+  gateway fees and full manual control over a once-a-year, low-volume flow.
+- **Order confirmation emails** are optional and off by default. Set
+  `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` in
+  `backend/.env` to turn them on (see `.env.example` for a Gmail example
+  using an App Password). If left unset, order placement still works
+  normally -- the email step is just silently skipped with a one-time
+  console warning.
 - **Location permission**: the signup and store-registration screens need
   device location access (`expo-location`) to capture coordinates for the
   service-radius check. Run `npm install` in `mobile/` after pulling these

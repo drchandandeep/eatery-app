@@ -8,7 +8,9 @@
     "splash": {
       "backgroundColor": "#171512"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yourcompany.kahumbo"
@@ -21,6 +23,11 @@
     },
     "web": {
       "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8338978f-0bf6-4d31-94ab-da19efe78a01"
+      }
     }
   }
 }

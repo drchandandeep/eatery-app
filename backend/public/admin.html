@@ -78,9 +78,9 @@ function renderLogin(errorMsg) {
       <p class="muted">Sign in with your platform admin account to review subscription payments.</p>
       <div class="card">
         <label>Email</label>
-        <input id="email" type="email" placeholder="platform@kahumbo.app" />
+        <input id="email" type="email" placeholder="platform@kahumbo.app" value="platform@kahumbo.app" />
         <label style="margin-top:12px;display:block">Password</label>
-        <input id="password" type="password" placeholder="••••••••" />
+        <input id="password" type="password" placeholder="••••••••" value="platform123" />
         ${errorMsg ? `<div class="error">${errorMsg}</div>` : ''}
         <button id="loginBtn">Log in</button>
       </div>

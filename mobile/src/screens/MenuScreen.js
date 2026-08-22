@@ -12,14 +12,20 @@ export default function MenuScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [closedInfo, setClosedInfo] = useState(null); // { message, hours } | null when open
   const { itemCount } = useCart();
 
   const load = useCallback(async () => {
     try {
       setError(null);
-      const { categories: cats } = await api.getMenu();
-      setCategories(cats);
-      if (!activeCategory && cats.length) setActiveCategory(cats[0].id);
+      const data = await api.getMenu();
+      setCategories(data.categories);
+      if (!activeCategory && data.categories.length) setActiveCategory(data.categories[0].id);
+      setClosedInfo(
+        data.store_open === false
+          ? { message: data.store_closed_message, hours: data.store_hours }
+          : null
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -85,6 +91,16 @@ export default function MenuScreen({ navigation }) {
         />
       </View>
 
+      {closedInfo && (
+        <View style={styles.closedBanner}>
+          <Text style={styles.closedBannerTitle}>Store closed</Text>
+          <Text style={styles.closedBannerText}>
+            {closedInfo.message}
+            {closedInfo.hours ? ` Open ${closedInfo.hours.opens_at}\u2013${closedInfo.hours.closes_at}.` : ''}
+          </Text>
+        </View>
+      )}
+
       <FlatList
         data={activeItems}
         keyExtractor={(i) => i.id}
@@ -129,5 +145,16 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   tabText: { color: colors.textMuted, fontWeight: '600', fontSize: 13, lineHeight: 16 },
   tabTextActive: { color: colors.white },
+  closedBanner: {
+    marginHorizontal: spacing(5),
+    marginBottom: spacing(3),
+    padding: spacing(4),
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  closedBannerTitle: { fontWeight: '700', fontSize: 14, color: colors.text, marginBottom: spacing(1) },
+  closedBannerText: { fontSize: 13, color: colors.textMuted },
   list: { paddingHorizontal: spacing(5), paddingBottom: spacing(10) },
 });

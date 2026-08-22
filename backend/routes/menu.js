@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
 const { effectiveStoreStatus } = require('../utils/subscription');
+const { getStoreOrderingStatus } = require('../utils/storeStatus');
+const { closedReasonMessage } = require('./orders');
 
 const router = express.Router();
 
@@ -44,9 +46,15 @@ router.get('/', softAuth, (req, res) => {
     items: items.filter((i) => i.category_id === cat.id),
   }));
 
+  const orderingStatus = store ? getStoreOrderingStatus(store) : { open: false, reason: 'subscription_inactive' };
+
   res.json({
     store_id: storeId,
-    store_active: store ? effectiveStoreStatus(store) === 'active' : false,
+    store_active: store ? effectiveStoreStatus(store) === 'active' : false, // kept for backwards compatibility
+    store_open: orderingStatus.open,
+    store_closed_reason: orderingStatus.open ? null : orderingStatus.reason,
+    store_closed_message: orderingStatus.open ? null : closedReasonMessage(orderingStatus.reason),
+    store_hours: store ? { opens_at: store.opens_at, closes_at: store.closes_at } : null,
     categories: byCategory,
   });
 });

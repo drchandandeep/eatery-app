@@ -39,6 +39,7 @@ export const api = {
     request(`/stores/nearby?lat=${lat}&lng=${lng}&radius_km=${radiusKm}`),
   registerStore: (payload) => request('/stores/register', { method: 'POST', body: payload }),
   myStore: () => request('/stores/me'),
+  updateStore: (payload) => request('/stores/me', { method: 'PATCH', body: payload }),
 
   // subscription (own-QR + manual approval, not a payment gateway)
   getSubscriptionQr: () => request('/stores/subscription-qr'),

@@ -39,6 +39,9 @@ function publicStore(store) {
     subscription_status: effectiveStatus(store),
     subscription_started_at: store.subscription_started_at,
     subscription_expires_at: store.subscription_expires_at,
+    opens_at: store.opens_at,
+    closes_at: store.closes_at,
+    accepting_orders: !!store.accepting_orders,
   };
 }
 
@@ -171,6 +174,26 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
       });
     }
     updates.service_radius_km = r;
+  }
+  // Daily operating hours -- editable any time (unlike the identity fields
+  // above), since these are operational, not something that needs
+  // permanent locking. Basic 'HH:MM' shape validation only.
+  const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  if (req.body.opens_at != null) {
+    if (!HHMM.test(req.body.opens_at)) return res.status(400).json({ error: 'opens_at must be in HH:MM 24h format' });
+    updates.opens_at = req.body.opens_at;
+  }
+  if (req.body.closes_at != null) {
+    if (!HHMM.test(req.body.closes_at)) return res.status(400).json({ error: 'closes_at must be in HH:MM 24h format' });
+    updates.closes_at = req.body.closes_at;
+  }
+  if ((updates.opens_at || store.opens_at) >= (updates.closes_at || store.closes_at)) {
+    return res.status(400).json({ error: 'opens_at must be earlier than closes_at' });
+  }
+  // Manual on/off switch -- independent of the hours above (e.g. pausing
+  // mid-day during a rush, while staying within scheduled hours).
+  if (req.body.accepting_orders != null) {
+    updates.accepting_orders = req.body.accepting_orders ? 1 : 0;
   }
 
   if (Object.keys(updates).length === 0) {

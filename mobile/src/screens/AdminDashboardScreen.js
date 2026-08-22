@@ -1,9 +1,10 @@
 // screens/AdminDashboardScreen.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl, Switch, TextInput } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
+import { showAlert } from '../utils/alert';
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -74,6 +75,8 @@ export default function AdminDashboardScreen({ navigation }) {
         </View>
       ) : (
         <>
+          <StoreAvailabilityCard store={store} onUpdated={(s) => setStore(s)} />
+
           <View style={styles.grid}>
             <StatCard label="Active orders" value={stats?.activeOrders ?? '--'} />
             <StatCard label="Total orders" value={stats?.totalOrders ?? '--'} />
@@ -146,6 +149,101 @@ function SubscriptionCard({ store, active, pendingReview, remainingDays, expirin
   );
 }
 
+function StoreAvailabilityCard({ store, onUpdated }) {
+  const [opensAt, setOpensAt] = useState(store?.opens_at || '12:00');
+  const [closesAt, setClosesAt] = useState(store?.closes_at || '20:00');
+  const [savingHours, setSavingHours] = useState(false);
+  const [togglingOrders, setTogglingOrders] = useState(false);
+
+  useEffect(() => {
+    setOpensAt(store?.opens_at || '12:00');
+    setClosesAt(store?.closes_at || '20:00');
+  }, [store?.opens_at, store?.closes_at]);
+
+  async function saveHours() {
+    setSavingHours(true);
+    try {
+      const { store: s } = await api.updateStore({ opens_at: opensAt, closes_at: closesAt });
+      onUpdated(s);
+      showAlert('Saved', `Store hours updated to ${s.opens_at}\u2013${s.closes_at}.`);
+    } catch (err) {
+      showAlert('Could not save hours', err.message);
+    } finally {
+      setSavingHours(false);
+    }
+  }
+
+  async function toggleAccepting(value) {
+    setTogglingOrders(true);
+    try {
+      const { store: s } = await api.updateStore({ accepting_orders: value });
+      onUpdated(s);
+    } catch (err) {
+      showAlert('Could not update', err.message);
+    } finally {
+      setTogglingOrders(false);
+    }
+  }
+
+  if (!store) return null;
+
+  return (
+    <View style={[styles.card, { marginTop: spacing(5) }]}>
+      <Text style={type.h2}>Store availability</Text>
+
+      <View style={styles.toggleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={type.body}>Accepting orders</Text>
+          <Text style={type.bodyMuted}>
+            Turn this off any time -- e.g. during a rush -- to pause new orders instantly, even within your open hours.
+          </Text>
+        </View>
+        <Switch
+          value={!!store.accepting_orders}
+          onValueChange={toggleAccepting}
+          disabled={togglingOrders}
+          trackColor={{ false: colors.border, true: colors.accentSoft }}
+          thumbColor={store.accepting_orders ? colors.accent : colors.surface}
+        />
+      </View>
+
+      <Text style={[type.body, { marginTop: spacing(5) }]}>Operating hours</Text>
+      <Text style={[type.bodyMuted, { marginBottom: spacing(3) }]}>Customers can only order during this window (24h, e.g. 12:00).</Text>
+      <View style={styles.hoursRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.hoursLabel}>Opens</Text>
+          <TextInput
+            style={styles.hoursInput}
+            value={opensAt}
+            onChangeText={setOpensAt}
+            placeholder="12:00"
+            placeholderTextColor={colors.textMuted}
+            maxLength={5}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.hoursLabel}>Closes</Text>
+          <TextInput
+            style={styles.hoursInput}
+            value={closesAt}
+            onChangeText={setClosesAt}
+            placeholder="20:00"
+            placeholderTextColor={colors.textMuted}
+            maxLength={5}
+          />
+        </View>
+      </View>
+      <Button
+        title={savingHours ? 'Saving...' : 'Save hours'}
+        variant="outline"
+        onPress={saveHours}
+        disabled={savingHours}
+        style={{ marginTop: spacing(3) }}
+      />
+    </View>
+  );
+}
+
 function StatCard({ label, value, wide }) {
   return (
     <View style={[styles.statCard, wide && { flexBasis: '100%' }]}>
@@ -177,4 +275,18 @@ const styles = StyleSheet.create({
   badgeOk: { backgroundColor: colors.success },
   badgeWarn: { backgroundColor: colors.danger },
   badgeText: { fontSize: 11, fontWeight: '800', color: colors.white },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginTop: spacing(3) },
+  hoursRow: { flexDirection: 'row', gap: spacing(3) },
+  hoursLabel: { ...type.caption, marginBottom: spacing(1) },
+  hoursInput: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing(3),
+    paddingVertical: spacing(2.5),
+    color: colors.text,
+    fontSize: 15,
+    textAlign: 'center',
+  },
 });

@@ -16,7 +16,7 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
-const { effectiveStoreStatus } = require('../utils/subscription');
+const { getStoreOrderingStatus } = require('../utils/storeStatus');
 const { sendOrderConfirmationEmail } = require('../utils/email');
 const orders = require('./orders');
 
@@ -45,8 +45,9 @@ function assertCustomerWithActiveStore(req) {
     throw err;
   }
   const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.user.store_id);
-  if (!store || effectiveStoreStatus(store) !== 'active') {
-    const err = new Error('This store is temporarily unavailable for ordering (subscription inactive). Please check back later.');
+  const orderingStatus = store ? getStoreOrderingStatus(store) : { open: false, reason: 'subscription_inactive' };
+  if (!store || !orderingStatus.open) {
+    const err = new Error(orders.closedReasonMessage(orderingStatus.reason));
     err.status = 402;
     throw err;
   }

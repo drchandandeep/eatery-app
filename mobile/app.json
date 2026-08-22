@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#171512"
+      "backgroundColor": "#FFFFFF"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -18,7 +18,7 @@
     "android": {
       "package": "com.yourcompany.kahumbo",
       "adaptiveIcon": {
-        "backgroundColor": "#171512"
+        "backgroundColor": "#FFFFFF"
       }
     },
     "web": {

@@ -30,9 +30,18 @@ CREATE TABLE IF NOT EXISTS stores (
   lng REAL NOT NULL,
   service_radius_km REAL NOT NULL DEFAULT 7,   -- customers must be within this to sign up / order (range 5-10, see backend/utils/config.js)
   annual_fee REAL NOT NULL DEFAULT 50000.00,
-  subscription_status TEXT NOT NULL DEFAULT 'inactive', -- 'inactive' | 'active' | 'expired'
+  subscription_status TEXT NOT NULL DEFAULT 'inactive', -- 'inactive' | 'active' | 'expired' | 'pending_review'
   subscription_started_at TEXT,
   subscription_expires_at TEXT,
+  -- Daily operating hours, 24h 'HH:MM' in IST (this app is India-only, so we
+  -- don't store a timezone -- see utils/storeStatus.js). Orders are blocked
+  -- outside this window regardless of the manual toggle below.
+  opens_at TEXT NOT NULL DEFAULT '12:00',
+  closes_at TEXT NOT NULL DEFAULT '20:00',
+  -- Independent manual kill-switch the store owner flips from their admin
+  -- dashboard (e.g. "too busy, pause new orders for an hour") -- separate
+  -- from the scheduled hours above so either one alone can close the store.
+  accepting_orders INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -174,6 +183,9 @@ for (const stmt of [
   'ALTER TABLE orders ADD COLUMN payment_ref TEXT',
   'ALTER TABLE orders ADD COLUMN estimated_delivery_minutes INTEGER',
   'ALTER TABLE users ADD COLUMN phone TEXT',
+  "ALTER TABLE stores ADD COLUMN opens_at TEXT NOT NULL DEFAULT '12:00'",
+  "ALTER TABLE stores ADD COLUMN closes_at TEXT NOT NULL DEFAULT '20:00'",
+  'ALTER TABLE stores ADD COLUMN accepting_orders INTEGER NOT NULL DEFAULT 1',
 ]) {
   try {
     db.exec(stmt);

@@ -12,7 +12,7 @@ function buildCheckoutHtml(options) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   </head>
-  <body style="margin:0;background:#171512;">
+  <body style="margin:0;background:${colors.bg};">
     <script>
       var options = ${payload};
       options.handler = function (response) {

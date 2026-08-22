@@ -175,8 +175,21 @@ machine pointed at that deployed backend URL.
 | Admin order management (advance status, set ETA) | `AdminOrdersScreen` + `PATCH /api/admin/orders/:id/status` |
 | Admin menu management (add/edit/delete items & categories, toggle availability) | `AdminMenuScreen` + `GET/POST/PATCH/DELETE /api/admin/menu` and `/api/admin/categories` |
 | Platform admin: review subscription payments, set platform QR | `PlatformAdminScreen` (mobile) or `/admin` (password-protected web page) + `routes/platform.js` |
+| Operating hours (default 12:00-20:00 IST) + manual order pause | `StoreAvailabilityCard` in `AdminDashboardScreen` + `PATCH /api/stores/me` + `utils/storeStatus.js` |
 
 ## Notes & next steps
+
+- **Store availability** is checked in one shared place
+  (`utils/storeStatus.js`) by `routes/orders.js`, `routes/payments.js`, and
+  `routes/menu.js` alike, so all three can never disagree about whether a
+  store is currently open. Three independent things can close a store:
+  subscription lapsed, the owner manually paused orders (e.g. mid-rush), or
+  it's outside the store's set operating hours -- each has its own
+  human-readable message. Hours are stored as plain `'HH:MM'` with no
+  timezone field, computed against IST specifically (`UTC+5:30`), since this
+  app is India-only -- if you ever need multi-timezone support, that
+  assumption lives in one function (`currentIstTime()`) and would need
+  revisiting there.
 
 - **Customer payments** go through Razorpay for real now (UPI, netbanking,
   cards) or cash on delivery. Add `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`

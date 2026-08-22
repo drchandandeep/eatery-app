@@ -12,7 +12,7 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <CartProvider>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <RootNavigator />
         </CartProvider>
       </AuthProvider>

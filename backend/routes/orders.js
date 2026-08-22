@@ -4,6 +4,7 @@ const { nanoid } = require('nanoid');
 const db = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
 const { effectiveStoreStatus } = require('../utils/subscription');
+const { getStoreOrderingStatus } = require('../utils/storeStatus');
 const { sendOrderConfirmationEmail } = require('../utils/email');
 const { DELIVERY_FEE } = require('../utils/config');
 
@@ -16,6 +17,22 @@ const router = express.Router();
 // what a cart actually costs, and the mobile app's checkout estimate reads
 // the same number back from the API rather than hardcoding its own copy.
 const TAX_RATE = 0.05;
+
+// Human-readable version of a getStoreOrderingStatus() reason -- shared so
+// the "why can't I order" message is worded identically everywhere it's
+// shown (checkout error, menu screen banner).
+function closedReasonMessage(reason) {
+  switch (reason) {
+    case 'subscription_inactive':
+      return 'This store is temporarily unavailable for ordering. Please check back later.';
+    case 'paused_by_store':
+      return 'This store has paused new orders right now. Please check back shortly.';
+    case 'outside_hours':
+      return 'This store is closed right now. Please check back during its opening hours.';
+    default:
+      return 'This store is not accepting orders right now.';
+  }
+}
 
 // Recomputes a cart's real price server-side from the store's own menu data
 // -- never trusts any price the client sends. Throws a plain Error with a
@@ -116,13 +133,16 @@ router.post('/', requireAuth, (req, res) => {
 
   const storeId = req.user.store_id;
 
-  // Full stop: if the store's annual subscription has lapsed, new orders
-  // are blocked immediately -- this is what actually makes the store "go
-  // dark" to its own already-registered customers, not just to new signups.
+  // Full stop: subscription lapsed, store paused itself, or outside its
+  // operating hours -- any one of these blocks new orders. All three
+  // checks live in one place (utils/storeStatus.js) so GET /api/menu can
+  // show the same "why is this closed" reason to the customer up front.
   const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
-  if (!store || effectiveStoreStatus(store) !== 'active') {
+  const orderingStatus = store ? getStoreOrderingStatus(store) : { open: false, reason: 'subscription_inactive' };
+  if (!store || !orderingStatus.open) {
     return res.status(402).json({
-      error: 'This store is temporarily unavailable for ordering (subscription inactive). Please check back later.',
+      error: closedReasonMessage(orderingStatus.reason),
+      reason: orderingStatus.reason,
     });
   }
 
@@ -178,3 +198,4 @@ router.get('/:id', requireAuth, (req, res) => {
 module.exports = router;
 module.exports.computeOrderTotals = computeOrderTotals;
 module.exports.insertOrderRecord = insertOrderRecord;
+module.exports.closedReasonMessage = closedReasonMessage;

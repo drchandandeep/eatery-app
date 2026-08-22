@@ -89,7 +89,7 @@ export default function CheckoutScreen({ navigation }) {
         name: 'Kahumbo',
         description: 'Order payment',
         prefill: { name: user?.name, email: user?.email },
-        theme: { color: '#8a5cf6' },
+        theme: { color: colors.accent },
       };
 
       if (Platform.OS === 'web') {

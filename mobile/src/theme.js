@@ -1,19 +1,19 @@
 // theme.js
-// Central design tokens. Warm, appetite-driven palette instead of the
-// generic red/white pizza-chain look -- charcoal base, a spiced-paprika
-// accent, and a fresh basil green for "go/success" states.
+// Central design tokens. Clean white base with a rich purple accent --
+// every screen pulls colors from here, so this is the single place to
+// re-theme the whole app.
 
 export const colors = {
-  bg: '#171512',
-  surface: '#211E1A',
-  surfaceAlt: '#2B2721',
-  border: '#3A352C',
-  text: '#F5F0E6',
-  textMuted: '#B8AF9E',
-  accent: '#E0652F', // paprika
-  accentSoft: '#F4A56A',
-  success: '#7FA650', // basil
-  danger: '#D95555',
+  bg: '#FFFFFF',
+  surface: '#F6F3FA',
+  surfaceAlt: '#EDE6F7',
+  border: '#DCD2EE',
+  text: '#241B33',
+  textMuted: '#786E8C',
+  accent: '#7A3FE0', // rich purple
+  accentSoft: '#B79AF0',
+  success: '#3F9142',
+  danger: '#D14343',
   white: '#FFFFFF',
 };
 
@@ -33,7 +33,7 @@ export const type = {
   body: { fontSize: 15, fontWeight: '400', color: colors.text },
   bodyMuted: { fontSize: 14, fontWeight: '400', color: colors.textMuted },
   caption: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  price: { fontSize: 15, fontWeight: '700', color: colors.accentSoft },
+  price: { fontSize: 15, fontWeight: '700', color: colors.accent },
 };
 
 export default { colors, spacing, radius, type };

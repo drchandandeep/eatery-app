@@ -33,6 +33,7 @@ export const api = {
   signup: (payload) => request('/auth/signup', { method: 'POST', body: payload }),
   login: (identifier, password) => request('/auth/login', { method: 'POST', body: { identifier, password } }),
   me: (token) => request('/auth/me', { token }),
+  updateMyCredentials: (payload) => request('/auth/me', { method: 'PATCH', body: payload }),
 
   // stores
   nearbyStores: (lat, lng, radiusKm = 10) =>

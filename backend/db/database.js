@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS stores (
   lat REAL NOT NULL,
   lng REAL NOT NULL,
   service_radius_km REAL NOT NULL DEFAULT 7,   -- customers must be within this to sign up / order (range 5-10, see backend/utils/config.js)
-  annual_fee REAL NOT NULL DEFAULT 50000.00,
+  annual_fee REAL NOT NULL DEFAULT 60000.00, -- increases 10% on every approved renewal, see routes/platform.js
   subscription_status TEXT NOT NULL DEFAULT 'inactive', -- 'inactive' | 'active' | 'expired' | 'pending_review'
   subscription_started_at TEXT,
   subscription_expires_at TEXT,

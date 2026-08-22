@@ -179,6 +179,19 @@ machine pointed at that deployed backend URL.
 
 ## Notes & next steps
 
+- **Annual subscription fee**: starts at Rs 60,000 and compounds 10% on every
+  approved renewal (Year 1 Rs 60,000 -> Year 2 Rs 66,000 -> Year 3
+  Rs 72,600...), set in `routes/platform.js`'s approve handler. This is
+  informational only (shown to the store owner on their next payment
+  screen) since payment itself is manual/QR-based, not gateway-enforced.
+- **Changing your platform admin login**: the seeded `platform@kahumbo.app`
+  account is just a starting point. Log in at `/admin`, scroll to "Your
+  login", and set your real email/password any time -- `PATCH /api/auth/me`.
+  Store owner accounts (`store_admin`) deliberately cannot change their own
+  login email this way, since it's what keeps "one owner, one store" true
+  (see `routes/stores.js`); customers and platform admins have no such
+  restriction.
+
 - **Store availability** is checked in one shared place
   (`utils/storeStatus.js`) by `routes/orders.js`, `routes/payments.js`, and
   `routes/menu.js` alike, so all three can never disagree about whether a

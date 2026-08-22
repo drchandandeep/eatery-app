@@ -63,7 +63,7 @@ export default function StoreRegisterScreen({ navigation }) {
       });
       showAlert(
         'Store registered',
-        'One last step: activate your annual subscription from the admin dashboard so customers can start ordering.'
+        'One last step: from your Admin dashboard, tap "Pay subscription" to see the QR code, pay your annual fee, and upload a screenshot as proof. We\u2019ll review and activate it shortly.'
       );
     } catch (err) {
       showAlert('Registration failed', err.message);

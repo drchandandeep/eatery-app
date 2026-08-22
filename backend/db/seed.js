@@ -40,7 +40,7 @@ function run() {
     30.6425,
     76.8173,
     7,
-    50000.0,
+    60000.0,
     now.toISOString(),
     oneYearFromNow.toISOString()
   );

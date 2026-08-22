@@ -121,4 +121,52 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user });
 });
 
+// PATCH /api/auth/me  { email?, password?, current_password }
+// Lets a logged-in user change their own login email and/or password --
+// but NOT for store_admin accounts. A store owner's email is deliberately
+// permanent (see routes/stores.js) so one owner can't quietly free up their
+// email to register a second store; letting them change it here later would
+// undermine that. Platform admins and customers have no such restriction --
+// this is primarily how you (the platform admin) move off the seeded demo
+// email once you're ready to use your own, without needing to touch the
+// database directly or wipe existing data by reseeding.
+router.patch('/me', requireAuth, (req, res) => {
+  if (req.user.role === 'store_admin') {
+    return res.status(403).json({
+      error: 'Store owner accounts cannot change their login email -- it is permanently tied to your store registration.',
+    });
+  }
+
+  const { email, password, current_password } = req.body;
+  if (!email && !password) {
+    return res.status(400).json({ error: 'Provide a new email and/or password to update' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  if (!current_password || !bcrypt.compareSync(current_password, user.password_hash)) {
+    return res.status(401).json({ error: 'current_password is incorrect' });
+  }
+
+  const updates = {};
+  if (email) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(normalizedEmail, user.id);
+    if (existing) return res.status(409).json({ error: 'Another account already uses this email' });
+    updates.email = normalizedEmail;
+  }
+  if (password) {
+    if (password.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    updates.password_hash = bcrypt.hashSync(password, 10);
+  }
+
+  const setClause = Object.keys(updates).map((f) => `${f} = ?`).join(', ');
+  db.prepare(`UPDATE users SET ${setClause} WHERE id = ?`).run(...Object.values(updates), user.id);
+
+  const updated = db.prepare('SELECT id, name, email, phone, role, store_id FROM users WHERE id = ?').get(user.id);
+  const token = signToken(updated);
+  res.json({ token, user: updated, message: 'Login details updated.' });
+});
+
 module.exports = router;

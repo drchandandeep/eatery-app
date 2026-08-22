@@ -29,6 +29,13 @@ router.get('/subscription-requests', (req, res) => {
 // POST /api/platform/subscription-requests/:id/approve
 // Activates (or extends) the store's subscription by one year from whichever
 // is later: now, or its current expiry (so an early renewal isn't wasted).
+// Every approval also raises the store's annual_fee by 10% for next time --
+// Year 1 Rs 60,000 -> Year 2 Rs 66,000 -> Year 3 Rs 72,600, compounding.
+// This is purely informational (what's shown to the store owner on their
+// next payment screen) since payment itself is manual/QR-based -- nothing
+// here enforces the customer actually paid the new amount.
+const ANNUAL_INCREASE_RATE = 1.10;
+
 router.post('/subscription-requests/:id/approve', (req, res) => {
   const request = db.prepare('SELECT * FROM subscription_payment_requests WHERE id = ?').get(req.params.id);
   if (!request) return res.status(404).json({ error: 'Request not found' });
@@ -41,15 +48,17 @@ router.post('/subscription-requests/:id/approve', (req, res) => {
   const currentExpiry = store.subscription_expires_at ? new Date(store.subscription_expires_at) : null;
   const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
   const newExpiry = new Date(base.getTime() + ONE_YEAR_MS);
+  const nextYearFee = Math.round(store.annual_fee * ANNUAL_INCREASE_RATE);
 
   const tx = db.transaction(() => {
     db.prepare(
       `UPDATE stores
        SET subscription_status = 'active',
            subscription_started_at = COALESCE(subscription_started_at, ?),
-           subscription_expires_at = ?
+           subscription_expires_at = ?,
+           annual_fee = ?
        WHERE id = ?`
-    ).run(now.toISOString(), newExpiry.toISOString(), store.id);
+    ).run(now.toISOString(), newExpiry.toISOString(), nextYearFee, store.id);
 
     db.prepare(
       `UPDATE subscription_payment_requests SET status = 'approved', reviewed_at = datetime('now'), reviewed_by = ? WHERE id = ?`
@@ -58,8 +67,8 @@ router.post('/subscription-requests/:id/approve', (req, res) => {
   tx();
 
   res.json({
-    message: `${store.name}'s subscription is now active until ${newExpiry.toISOString().slice(0, 10)}.`,
-    store: db.prepare('SELECT id, name, subscription_status, subscription_expires_at FROM stores WHERE id = ?').get(store.id),
+    message: `${store.name}'s subscription is now active until ${newExpiry.toISOString().slice(0, 10)}. Next year's fee: \u20b9${nextYearFee}.`,
+    store: db.prepare('SELECT id, name, subscription_status, subscription_expires_at, annual_fee FROM stores WHERE id = ?').get(store.id),
   });
 });
 

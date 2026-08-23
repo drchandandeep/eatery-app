@@ -55,6 +55,12 @@ router.get('/', softAuth, (req, res) => {
     store_closed_reason: orderingStatus.open ? null : orderingStatus.reason,
     store_closed_message: orderingStatus.open ? null : closedReasonMessage(orderingStatus.reason),
     store_hours: store ? { opens_at: store.opens_at, closes_at: store.closes_at } : null,
+    // The store's own payment QR (for the "Pay via Store QR" checkout
+    // option) -- null if the store hasn't uploaded one yet, in which case
+    // the mobile app should only offer Cash on Delivery.
+    store_order_qr: store?.order_qr_image_base64
+      ? { image_base64: store.order_qr_image_base64, upi_id: store.order_upi_id || null }
+      : null,
     categories: byCategory,
   });
 });

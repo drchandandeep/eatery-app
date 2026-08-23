@@ -42,6 +42,8 @@ function publicStore(store) {
     opens_at: store.opens_at,
     closes_at: store.closes_at,
     accepting_orders: !!store.accepting_orders,
+    order_qr_image_base64: store.order_qr_image_base64 || null,
+    order_upi_id: store.order_upi_id || null,
   };
 }
 
@@ -50,7 +52,7 @@ function publicStore(store) {
 // email and the store address supplied here are permanent -- there is no
 // endpoint anywhere in this API that can change them afterward.
 // body: { owner_name, owner_email, owner_password, store_name,
-//         address_line, city, zip, lat, lng }
+//         address_line, city, zip, lat, lng, order_qr_image_base64?, order_upi_id? }
 router.post('/register', (req, res) => {
   const {
     owner_name,
@@ -62,6 +64,8 @@ router.post('/register', (req, res) => {
     zip,
     lat,
     lng,
+    order_qr_image_base64,
+    order_upi_id,
   } = req.body;
 
   if (!owner_name || !owner_email || !owner_password || !store_name || !address_line) {
@@ -96,11 +100,27 @@ router.post('/register', (req, res) => {
   const userId = nanoid(12);
 
   const tx = db.transaction(() => {
+    // The order-payment QR is optional at registration -- a store owner can
+    // always add or change it later from their Admin dashboard (PATCH
+    // /api/stores/me). Customers simply won't see a "Pay via Store QR"
+    // option at checkout until one exists (see routes/menu.js).
     db.prepare(
       `INSERT INTO stores
-        (id, name, owner_email, address_line, city, zip, lat, lng, service_radius_km, subscription_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive')`
-    ).run(storeId, store_name, normalizedEmail, address_line, city || null, zip || null, Number(lat), Number(lng), DEFAULT_SERVICE_RADIUS_KM);
+        (id, name, owner_email, address_line, city, zip, lat, lng, service_radius_km, subscription_status, order_qr_image_base64, order_upi_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive', ?, ?)`
+    ).run(
+      storeId,
+      store_name,
+      normalizedEmail,
+      address_line,
+      city || null,
+      zip || null,
+      Number(lat),
+      Number(lng),
+      DEFAULT_SERVICE_RADIUS_KM,
+      order_qr_image_base64 || null,
+      order_upi_id || null
+    );
 
     db.prepare(
       `INSERT INTO users (id, name, email, phone, password_hash, role, store_id)
@@ -194,6 +214,18 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
   // mid-day during a rush, while staying within scheduled hours).
   if (req.body.accepting_orders != null) {
     updates.accepting_orders = req.body.accepting_orders ? 1 : 0;
+  }
+  // The store's own order-payment QR code -- shown to customers at
+  // checkout. Uploading a new one replaces the old one; there's no history
+  // kept (unlike the platform's subscription QR review flow) since this is
+  // the store's own money, not something the platform needs to verify.
+  // Uses "in req.body" rather than "!= null" so an explicit null (clear the
+  // QR) is honored, not silently treated as "field not provided".
+  if ('order_qr_image_base64' in req.body) {
+    updates.order_qr_image_base64 = req.body.order_qr_image_base64 || null;
+  }
+  if ('order_upi_id' in req.body) {
+    updates.order_upi_id = req.body.order_upi_id || null;
   }
 
   if (Object.keys(updates).length === 0) {

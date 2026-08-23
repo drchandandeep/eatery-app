@@ -10,7 +10,6 @@ const storeRoutes = require('./routes/stores');
 const menuRoutes = require('./routes/menu');
 const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/admin');
-const paymentRoutes = require('./routes/payments');
 const platformRoutes = require('./routes/platform');
 
 const app = express();
@@ -30,7 +29,6 @@ app.use('/api/stores', storeRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/payments', paymentRoutes);
 app.use('/api/platform', platformRoutes);
 
 // Password-protected web page (login form + subscription-approval UI) for

@@ -1,11 +1,11 @@
 // utils/storeStatus.js
 // Single source of truth for "can this store currently accept new orders?"
 // Three independent things can block ordering, and every one of them must
-// be checked the same way everywhere -- orders.js, payments.js, and menu.js
-// all import this rather than each rolling their own check, which is
-// exactly how the service-radius and delivery-fee bugs slipped in earlier
-// in this project (the same number/logic defined in two places, and the
-// two copies quietly drifting apart).
+// be checked the same way everywhere -- orders.js and menu.js both import
+// this rather than each rolling their own check, which is exactly how the
+// service-radius and delivery-fee bugs slipped in earlier in this project
+// (the same number/logic defined in two places, and the two copies quietly
+// drifting apart).
 const { effectiveStoreStatus } = require('./subscription');
 
 // This app is India-only, so store hours are stored as plain 'HH:MM' in IST

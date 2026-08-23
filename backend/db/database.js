@@ -42,6 +42,16 @@ CREATE TABLE IF NOT EXISTS stores (
   -- dashboard (e.g. "too busy, pause new orders for an hour") -- separate
   -- from the scheduled hours above so either one alone can close the store.
   accepting_orders INTEGER NOT NULL DEFAULT 1,
+  -- The store's own UPI QR code, uploaded by the store owner, shown to
+  -- customers at checkout as a "pay via QR" option (see routes/orders.js).
+  -- There is no payment gateway here -- customers scan this in their own
+  -- UPI app and confirm "I've paid" in-app; the store owner is the one who
+  -- actually knows the money landed, same trust model as the platform's own
+  -- subscription QR (see subscription_payment_requests) but without a
+  -- formal review step, since it's the store's own money at stake, not the
+  -- platform's.
+  order_qr_image_base64 TEXT,
+  order_upi_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -121,10 +131,14 @@ CREATE TABLE IF NOT EXISTS orders (
   tax REAL NOT NULL DEFAULT 0,
   total REAL NOT NULL,
   address_line TEXT,
-  payment_method TEXT DEFAULT 'cash', -- 'cash' (pay on delivery) | 'online' (Razorpay)
+  -- 'cash' (Cash on Delivery, Cash/UPI at the door) | 'qr' (customer pays
+  -- via the store's own uploaded QR code and confirms in-app). Neither is
+  -- automatically verified -- there's no payment gateway in this app; the
+  -- store owner confirms receipt themselves when advancing order status.
+  payment_method TEXT DEFAULT 'cash',
   payment_status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'paid'
-  payment_gateway TEXT, -- e.g. 'razorpay', null for cash
-  payment_ref TEXT, -- gateway payment id, for reconciliation/refunds
+  payment_gateway TEXT, -- unused now (no gateway), kept for schema stability
+  payment_ref TEXT, -- unused now, kept for schema stability
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -186,6 +200,8 @@ for (const stmt of [
   "ALTER TABLE stores ADD COLUMN opens_at TEXT NOT NULL DEFAULT '12:00'",
   "ALTER TABLE stores ADD COLUMN closes_at TEXT NOT NULL DEFAULT '20:00'",
   'ALTER TABLE stores ADD COLUMN accepting_orders INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE stores ADD COLUMN order_qr_image_base64 TEXT',
+  'ALTER TABLE stores ADD COLUMN order_upi_id TEXT',
 ]) {
   try {
     db.exec(stmt);

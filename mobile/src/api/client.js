@@ -51,14 +51,12 @@ export const api = {
   getMenu: (storeId) => request(storeId ? `/menu?store_id=${storeId}` : '/menu'),
   getItem: (id) => request(`/menu/items/${id}`),
 
-  // orders
+  // orders -- payment_method is 'cash' (Cash on Delivery, Cash/UPI at the
+  // door) or 'qr' (customer pays via the store's own uploaded QR code and
+  // confirms in-app). Neither is gateway-verified; see routes/orders.js.
   placeOrder: (payload) => request('/orders', { method: 'POST', body: payload }),
   getOrders: () => request('/orders'),
   getOrder: (id) => request(`/orders/${id}`),
-
-  // payments (Razorpay -- online orders only; cash orders use placeOrder above)
-  createPaymentOrder: (payload) => request('/payments/create-order', { method: 'POST', body: payload }),
-  verifyAndPlaceOrder: (payload) => request('/payments/verify-and-place-order', { method: 'POST', body: payload }),
 
   // admin (store_admin)
   adminStats: () => request('/admin/stats'),
@@ -79,5 +77,6 @@ export const api = {
   platformSubscriptionRequests: (status = 'pending') => request(`/platform/subscription-requests?status=${status}`),
   platformApproveRequest: (id) => request(`/platform/subscription-requests/${id}/approve`, { method: 'POST' }),
   platformRejectRequest: (id, reason) => request(`/platform/subscription-requests/${id}/reject`, { method: 'POST', body: { reason } }),
+  platformGetQrCode: () => request('/platform/qr-code'),
   platformSetQrCode: (payload) => request('/platform/qr-code', { method: 'POST', body: payload }),
 };

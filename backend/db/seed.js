@@ -292,25 +292,26 @@ function run() {
   insertUser.run(
     id(),
     'Platform Admin',
-    'platform@kahumbo.app',
+    'gkgst2026@gmail.com',
     '9999999999',
-    bcrypt.hashSync('platform123', 10),
+    bcrypt.hashSync('Simi@1287', 10),
     'platform_admin',
     null
   );
 
   // Seed a placeholder payment QR so the store owner's subscription screen
   // shows something rather than "not set up yet" on first run. Replace it
-  // with your real UPI QR any time from the /admin web page -- that upload
-  // overwrites this row, it does not create a second one.
+  // with your real UPI QR any time from the /admin web page (or the mobile
+  // app's Platform Admin screen) -- that upload overwrites this row, it
+  // does not create a second one.
   db.prepare(
     `INSERT INTO platform_settings (key, value) VALUES ('qr_image_base64', ?)`
   ).run(placeholderQr);
 
   console.log('Seed complete.');
-  console.log('Store admin login    -> email: owner@kahumbo.app     password: admin123');
-  console.log('Demo customer        -> email: customer@kahumbo.app  password: customer123');
-  console.log('Platform admin login -> email: platform@kahumbo.app  password: platform123');
+  console.log('Store admin login    -> email: owner@kahumbo.app        password: admin123');
+  console.log('Demo customer        -> email: customer@kahumbo.app     password: customer123');
+  console.log('Platform admin login -> email: gkgst2026@gmail.com      password: Simi@1287');
   console.log('Platform admin web page: /admin (login with the platform admin account above)');
   console.log(`Store location: lat 30.6425, lng 76.8173, (service radius 7km)`);
 }

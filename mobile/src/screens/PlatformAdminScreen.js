@@ -1,10 +1,12 @@
 // screens/PlatformAdminScreen.js
 // Only reachable by the platform_admin role (see navigation/index.js) --
 // this is the platform owner's own review queue for store subscription
-// payment proofs. Approving here is the one and only thing that activates
-// a store's subscription (see routes/platform.js).
+// payment proofs, plus management of the platform's own payment QR code.
+// Approving a request here is the one and only thing that activates a
+// store's subscription (see routes/platform.js).
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, Image, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, Image, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
@@ -18,6 +20,12 @@ export default function PlatformAdminScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [actingId, setActingId] = useState(null);
 
+  const [qr, setQr] = useState(null); // { image_base64, upi_id } | null
+  const [loadingQr, setLoadingQr] = useState(true);
+  const [newQrImage, setNewQrImage] = useState(null); // { uri, base64, mime } picked but not yet saved
+  const [upiIdInput, setUpiIdInput] = useState('');
+  const [savingQr, setSavingQr] = useState(false);
+
   const load = useCallback(() => {
     api
       .platformSubscriptionRequests('pending')
@@ -26,6 +34,14 @@ export default function PlatformAdminScreen() {
         setLoading(false);
         setRefreshing(false);
       });
+    api
+      .platformGetQrCode()
+      .then((data) => {
+        setQr(data);
+        setUpiIdInput(data.upi_id || '');
+      })
+      .catch(() => {})
+      .finally(() => setLoadingQr(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -56,14 +72,99 @@ export default function PlatformAdminScreen() {
     }
   }
 
+  async function pickQrImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Photo access needed', 'Allow photo library access to upload your QR code.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      setNewQrImage({ uri: asset.uri, base64: asset.base64, mime: asset.mimeType || 'image/jpeg' });
+    }
+  }
+
+  async function saveQr() {
+    if (!newQrImage) {
+      showAlert('Choose an image', 'Pick a QR code image from your gallery first.');
+      return;
+    }
+    setSavingQr(true);
+    try {
+      await api.platformSetQrCode({
+        image_base64: `data:${newQrImage.mime};base64,${newQrImage.base64}`,
+        upi_id: upiIdInput.trim() || undefined,
+      });
+      showAlert('Saved', 'Your payment QR code has been updated.');
+      setNewQrImage(null);
+      load();
+    } catch (err) {
+      showAlert('Could not save QR code', err.message);
+    } finally {
+      setSavingQr(false);
+    }
+  }
+
+  const hasQr = !!qr?.image_base64;
+
+  const qrSection = (
+    <View style={styles.qrCard}>
+      <Text style={type.h2}>Your payment QR code</Text>
+      <Text style={[type.bodyMuted, { marginTop: spacing(1) }]}>
+        Store owners scan this to pay their annual subscription fee.
+      </Text>
+
+      {loadingQr ? (
+        <ActivityIndicator color={colors.accent} style={{ marginTop: spacing(4) }} />
+      ) : (
+        <>
+          {newQrImage ? (
+            <Image source={{ uri: newQrImage.uri }} style={styles.qrImage} resizeMode="contain" />
+          ) : hasQr ? (
+            <Image source={{ uri: qr.image_base64 }} style={styles.qrImage} resizeMode="contain" />
+          ) : (
+            <View style={[styles.qrImage, styles.qrPlaceholder]}>
+              <Text style={type.bodyMuted}>No QR code uploaded yet</Text>
+            </View>
+          )}
+
+          <Text style={[styles.label, { marginTop: spacing(4) }]}>UPI ID (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={upiIdInput}
+            onChangeText={setUpiIdInput}
+            placeholder="yourname@upi"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+          />
+
+          <Button
+            title={newQrImage ? 'Choose a different image' : hasQr ? 'Change QR code' : 'Upload QR code'}
+            variant="outline"
+            onPress={pickQrImage}
+            style={{ marginTop: spacing(3) }}
+          />
+          {(newQrImage || upiIdInput !== (qr?.upi_id || '')) && (
+            <Button title="Save" onPress={saveQr} loading={savingQr} style={{ marginTop: spacing(2) }} />
+          )}
+        </>
+      )}
+    </View>
+  );
+
   if (loading) return <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /></View>;
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         <View>
-          <Text style={type.display}>Approvals</Text>
-          <Text style={type.bodyMuted}>Subscription payment proofs awaiting review</Text>
+          <Text style={type.display}>Platform Admin</Text>
+          <Text style={type.bodyMuted}>Subscription payments & payment QR</Text>
         </View>
         <Button title="Log out" variant="outline" onPress={logout} />
       </View>
@@ -73,6 +174,12 @@ export default function PlatformAdminScreen() {
         keyExtractor={(r) => r.id}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.accent} />}
+        ListHeaderComponent={
+          <>
+            {qrSection}
+            <Text style={[type.h2, { marginBottom: spacing(2) }]}>Approvals</Text>
+          </>
+        }
         ListEmptyComponent={<Text style={type.bodyMuted}>Nothing pending review right now.</Text>}
         renderItem={({ item }) => (
           <View style={styles.card}>
@@ -125,4 +232,25 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   screenshot: { width: '100%', height: 260, borderRadius: radius.sm, marginTop: spacing(3), backgroundColor: colors.bg },
+  qrCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing(4),
+    marginBottom: spacing(6),
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  qrImage: { width: 200, height: 200, borderRadius: radius.sm, marginTop: spacing(3), alignSelf: 'center', backgroundColor: colors.bg },
+  qrPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  label: { ...type.caption, marginBottom: spacing(1.5) },
+  input: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing(4),
+    paddingVertical: spacing(3),
+    color: colors.text,
+    fontSize: 15,
+  },
 });

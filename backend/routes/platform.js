@@ -93,6 +93,17 @@ router.post('/subscription-requests/:id/reject', (req, res) => {
   res.json({ message: 'Request rejected. The store owner can resubmit with a new screenshot.' });
 });
 
+// GET /api/platform/qr-code
+// Lets the platform admin see their currently-set QR (if any) before
+// deciding whether to upload a first one or replace an existing one --
+// used to drive the "ask to upload if missing, offer to change if present"
+// flow on both the /admin web page and the mobile PlatformAdminScreen.
+router.get('/qr-code', (req, res) => {
+  const qr = db.prepare("SELECT value FROM platform_settings WHERE key = 'qr_image_base64'").get();
+  const upiId = db.prepare("SELECT value FROM platform_settings WHERE key = 'upi_id'").get();
+  res.json({ image_base64: qr?.value || null, upi_id: upiId?.value || null });
+});
+
 // POST /api/platform/qr-code  { image_base64, upi_id }
 // Sets/replaces the platform's own payment QR shown to every store owner.
 router.post('/qr-code', (req, res) => {

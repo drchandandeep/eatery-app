@@ -11,11 +11,8 @@ const { DELIVERY_FEE } = require('../utils/config');
 const router = express.Router();
 
 // India GST for restaurants is commonly 5% (non-AC / composition scheme).
-// DELIVERY_FEE lives in utils/config.js as the single source of truth --
-// routes/payments.js imports computeOrderTotals rather than redefining
-// these, so the two payment paths (cash and Razorpay) can never disagree on
-// what a cart actually costs, and the mobile app's checkout estimate reads
-// the same number back from the API rather than hardcoding its own copy.
+// DELIVERY_FEE lives in utils/config.js as the single source of truth so
+// the backend total and the mobile checkout estimate can never disagree.
 const TAX_RATE = 0.05;
 
 // Human-readable version of a getStoreOrderingStatus() reason -- shared so
@@ -75,9 +72,8 @@ function computeOrderTotals(items, storeId) {
 }
 
 // Writes the order + its line items + its first status-history row in one
-// transaction. Shared by both the cash-on-delivery path below and the
-// Razorpay verify-and-place path in routes/payments.js, so there is exactly
-// one place that knows how an order gets written to the database.
+// transaction. This is the only place an order gets written to the
+// database (both cash and QR payment methods funnel through here).
 function insertOrderRecord({ storeId, userId, totals, addressLine, paymentMethod, paymentStatus, paymentGateway, paymentRef }) {
   const orderId = nanoid(12);
 
@@ -121,12 +117,18 @@ function insertOrderRecord({ storeId, userId, totals, addressLine, paymentMethod
   return { ...order, items: orderItems };
 }
 
-// POST /api/orders  -> place a cash-on-delivery order (no payment gateway).
-// For online payment (UPI/netbanking/card via Razorpay), the client instead
-// calls POST /api/payments/create-order then /api/payments/verify-and-place-order.
-// body: { items: [{ menu_item_id, quantity, selected_options: [{group,choice,price_delta}] }], address_line }
+// POST /api/orders  -> place an order. No payment gateway is involved --
+// payment is either collected at delivery (cash or UPI, in person) or paid
+// upfront by the customer scanning the store's own QR code and confirming
+// they've paid. Either way this endpoint just records the order; there's
+// no automatic payment verification for either path (see
+// mobile/src/screens/CheckoutScreen.js for why: a QR-based payment can't be
+// verified server-side without a real payment gateway, so the store owner
+// confirms receipt themselves when advancing the order's status).
+// body: { items: [...], address_line, payment_method: 'cash' | 'qr' }
 router.post('/', requireAuth, (req, res) => {
   const { items, address_line } = req.body;
+  const paymentMethod = req.body.payment_method === 'qr' ? 'qr' : 'cash';
   if (req.user.role !== 'customer' || !req.user.store_id) {
     return res.status(403).json({ error: 'Only customer accounts linked to a store can place orders' });
   }
@@ -146,6 +148,10 @@ router.post('/', requireAuth, (req, res) => {
     });
   }
 
+  if (paymentMethod === 'qr' && !store.order_qr_image_base64) {
+    return res.status(400).json({ error: 'This store hasn\u2019t set up a payment QR code yet. Please choose Cash on Delivery instead.' });
+  }
+
   let totals;
   try {
     totals = computeOrderTotals(items, storeId);
@@ -158,8 +164,11 @@ router.post('/', requireAuth, (req, res) => {
     userId: req.user.id,
     totals,
     addressLine: address_line,
-    paymentMethod: 'cash',
-    paymentStatus: 'pending', // collected on delivery
+    paymentMethod,
+    // Both paths are "pending" from the platform's point of view -- cash is
+    // collected at delivery, and a QR payment can't be auto-verified. The
+    // store owner is the one who actually knows when money has landed.
+    paymentStatus: 'pending',
   });
 
   // Fire-and-forget: never let a slow/broken mail server delay the response

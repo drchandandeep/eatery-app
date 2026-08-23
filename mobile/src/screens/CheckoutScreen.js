@@ -1,14 +1,11 @@
 // screens/CheckoutScreen.js
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import Button from '../components/Button';
-import RazorpayWebViewCheckout from '../components/RazorpayWebViewCheckout';
 import { useCart } from '../context/CartContext';
-import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { showAlert } from '../utils/alert';
-import { openRazorpayWeb } from '../utils/razorpayWeb';
 
 // Client-side estimate only, shown before the order is placed -- the real,
 // authoritative total is always recomputed server-side (see
@@ -17,25 +14,36 @@ import { openRazorpayWeb } from '../utils/razorpayWeb';
 const TAX_RATE = 0.05; // India GST for restaurants (non-AC/composition scheme)
 const DELIVERY_FEE = 100; // flat delivery fee in rupees -- must match backend/utils/config.js
 
-const PAYMENT_METHODS = [
-  { key: 'online', label: 'Pay online (UPI / Card / Netbanking)' },
-  { key: 'cash', label: 'Cash on delivery' },
-];
-
+// Neither payment method here is verified by a gateway -- the store's own
+// QR is scanned in the customer's own UPI app and confirmed by tapping
+// "I've paid, place order"; Cash on Delivery is settled in person. The
+// store owner is the one who actually knows when money has landed, and
+// confirms that by advancing the order's status (see AdminOrdersScreen).
 export default function CheckoutScreen({ navigation }) {
   const { lines, subtotal, clearCart } = useCart();
-  const { user } = useAuth();
   const [address, setAddress] = useState('');
-  const [payment, setPayment] = useState('online');
+  const [payment, setPayment] = useState('cash');
   const [placing, setPlacing] = useState(false);
+  const [storeQr, setStoreQr] = useState(null); // { image_base64, upi_id } | null
 
-  // Native-only: drives the WebView checkout modal. Unused on web, where
-  // openRazorpayWeb() handles everything directly without a modal.
-  const [razorpayVisible, setRazorpayVisible] = useState(false);
-  const [razorpayOptions, setRazorpayOptions] = useState(null);
+  useEffect(() => {
+    api
+      .getMenu()
+      .then((data) => setStoreQr(data.store_order_qr || null))
+      .catch(() => {});
+  }, []);
 
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax + DELIVERY_FEE;
+
+  const paymentMethods = [
+    { key: 'cash', label: 'Cash on Delivery (Cash / UPI)' },
+    {
+      key: 'qr',
+      label: storeQr ? 'Pay online' : 'Pay online (not set up by this store yet)',
+      disabled: !storeQr,
+    },
+  ];
 
   function currentCartItems() {
     return lines.map((l) => ({
@@ -50,19 +58,17 @@ export default function CheckoutScreen({ navigation }) {
       showAlert('Delivery address needed', 'Please add where we should deliver your order.');
       return;
     }
-    if (payment === 'cash') {
-      await placeCashOrder();
-    } else {
-      await startOnlinePayment();
+    if (payment === 'qr' && !storeQr) {
+      showAlert('QR not available', "This store hasn't set up a payment QR code yet. Please choose Cash on Delivery.");
+      return;
     }
-  }
 
-  async function placeCashOrder() {
     setPlacing(true);
     try {
       const { order } = await api.placeOrder({
         items: currentCartItems(),
         address_line: address.trim(),
+        payment_method: payment,
       });
       clearCart();
       navigation.replace('OrderTracking', { orderId: order.id });
@@ -71,75 +77,6 @@ export default function CheckoutScreen({ navigation }) {
     } finally {
       setPlacing(false);
     }
-  }
-
-  async function startOnlinePayment() {
-    setPlacing(true);
-    try {
-      const { razorpay_order_id, amount, currency, key_id } = await api.createPaymentOrder({
-        items: currentCartItems(),
-        address_line: address.trim(),
-      });
-
-      const options = {
-        key: key_id,
-        amount,
-        currency,
-        order_id: razorpay_order_id,
-        name: 'Kahumbo',
-        description: 'Order payment',
-        prefill: { name: user?.name, email: user?.email },
-        theme: { color: colors.accent },
-      };
-
-      if (Platform.OS === 'web') {
-        const response = await openRazorpayWeb(options);
-        await completeOnlineOrder(response);
-      } else {
-        setRazorpayOptions(options);
-        setRazorpayVisible(true);
-        // placing stays true until the WebView modal resolves via one of
-        // its callbacks below -- see handleNativeSuccess/Failure/Cancel.
-        return;
-      }
-    } catch (err) {
-      showAlert('Payment could not be started', err.message);
-      setPlacing(false);
-    }
-  }
-
-  async function completeOnlineOrder(razorpayResponse) {
-    try {
-      const { order } = await api.verifyAndPlaceOrder({
-        items: currentCartItems(),
-        address_line: address.trim(),
-        razorpay_order_id: razorpayResponse.razorpay_order_id,
-        razorpay_payment_id: razorpayResponse.razorpay_payment_id,
-        razorpay_signature: razorpayResponse.razorpay_signature,
-      });
-      clearCart();
-      navigation.replace('OrderTracking', { orderId: order.id });
-    } catch (err) {
-      showAlert('Payment succeeded but the order could not be confirmed', err.message);
-    } finally {
-      setPlacing(false);
-    }
-  }
-
-  function handleNativeSuccess(payload) {
-    setRazorpayVisible(false);
-    completeOnlineOrder(payload);
-  }
-
-  function handleNativeFailure(payload) {
-    setRazorpayVisible(false);
-    setPlacing(false);
-    showAlert('Payment failed', payload?.description || 'Please try again.');
-  }
-
-  function handleNativeCancel() {
-    setRazorpayVisible(false);
-    setPlacing(false);
   }
 
   return (
@@ -159,17 +96,34 @@ export default function CheckoutScreen({ navigation }) {
 
         <Text style={[styles.label, { marginTop: spacing(5) }]}>Payment method</Text>
         <View style={{ gap: spacing(2) }}>
-          {PAYMENT_METHODS.map((m) => (
+          {paymentMethods.map((m) => (
             <Pressable
               key={m.key}
-              onPress={() => setPayment(m.key)}
-              style={[styles.paymentRow, payment === m.key && styles.paymentRowActive]}
+              onPress={() => !m.disabled && setPayment(m.key)}
+              disabled={m.disabled}
+              style={[
+                styles.paymentRow,
+                payment === m.key && styles.paymentRowActive,
+                m.disabled && styles.paymentRowDisabled,
+              ]}
             >
               <View style={[styles.radio, payment === m.key && styles.radioActive]} />
-              <Text style={[type.body, payment === m.key && { color: colors.text, fontWeight: '600' }]}>{m.label}</Text>
+              <Text style={[type.body, payment === m.key && { color: colors.text, fontWeight: '600' }, m.disabled && { color: colors.textMuted }]}>
+                {m.label}
+              </Text>
             </Pressable>
           ))}
         </View>
+
+        {payment === 'qr' && storeQr && (
+          <View style={styles.qrCard}>
+            <Image source={{ uri: storeQr.image_base64 }} style={styles.qrImage} resizeMode="contain" />
+            {storeQr.upi_id && <Text style={[type.bodyMuted, { marginTop: spacing(2) }]}>UPI ID: {storeQr.upi_id}</Text>}
+            <Text style={[type.caption, { marginTop: spacing(2), textAlign: 'center' }]}>
+              Scan this in your UPI app, pay ₹{Math.round(total)}, then tap "Place order" below once you've paid.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.summary}>
           <SummaryRow label="Subtotal" value={subtotal} />
@@ -181,16 +135,12 @@ export default function CheckoutScreen({ navigation }) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button title={`Place order · ₹${Math.round(total)}`} onPress={handlePlaceOrder} loading={placing} />
+        <Button
+          title={payment === 'qr' ? `I've paid \u2014 Place order \u00b7 \u20b9${Math.round(total)}` : `Place order \u00b7 \u20b9${Math.round(total)}`}
+          onPress={handlePlaceOrder}
+          loading={placing}
+        />
       </View>
-
-      <RazorpayWebViewCheckout
-        visible={razorpayVisible}
-        options={razorpayOptions}
-        onSuccess={handleNativeSuccess}
-        onFailure={handleNativeFailure}
-        onCancel={handleNativeCancel}
-      />
     </View>
   );
 }
@@ -230,6 +180,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   paymentRowActive: { borderColor: colors.accent },
+  paymentRowDisabled: { opacity: 0.5 },
   radio: {
     width: 18,
     height: 18,
@@ -238,6 +189,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   radioActive: { borderColor: colors.accent, backgroundColor: colors.accent },
+  qrCard: {
+    marginTop: spacing(3),
+    padding: spacing(4),
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+  },
+  qrImage: { width: 200, height: 200, borderRadius: radius.sm },
   summary: { marginTop: spacing(8), backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing(4), borderWidth: 1, borderColor: colors.border },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing(1.5) },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing(2) },

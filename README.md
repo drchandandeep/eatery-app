@@ -166,7 +166,7 @@ machine pointed at that deployed backend URL.
 | Menu browsing by category, scoped per store | `MenuScreen` + `GET /api/menu?store_id=` |
 | Item customization (size, crust, toppings, etc.) | `ItemDetailScreen` + `option_groups`/`option_choices` tables |
 | Cart | `CartContext` (client-side, submitted at checkout) |
-| Checkout & payment (Razorpay: UPI/netbanking/cards, or cash on delivery) | `CheckoutScreen` + `POST /api/payments/create-order`, `/api/payments/verify-and-place-order`, `POST /api/orders` (cash) |
+| Checkout & payment (store's own QR "Pay online", or Cash on Delivery) | `CheckoutScreen` + `POST /api/orders` |
 | Order confirmation email | `utils/email.js` (SMTP, optional -- silently skipped if unset) |
 | Live order tracking with ETA | `OrderTrackingScreen` (polls every 5s) + status timeline + `estimated_delivery_minutes` |
 | User accounts, signup/login | `AuthContext` + JWT auth on the backend |
@@ -204,28 +204,36 @@ machine pointed at that deployed backend URL.
   assumption lives in one function (`currentIstTime()`) and would need
   revisiting there.
 
-- **Customer payments** go through Razorpay for real now (UPI, netbanking,
-  cards) or cash on delivery. Add `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`
-  to `backend/.env` (Test Mode keys are free and instant, no KYC needed --
-  see dashboard.razorpay.com → Settings → API Keys) and run `npm install`
-  in both `backend/` and `mobile/` to pick up the `razorpay` and
-  `react-native-webview` packages. On web, checkout uses Razorpay's JS SDK
-  directly; on iOS/Android it runs inside a WebView bridge (compatible with
-  plain Expo Go — no custom dev client needed). Payments are verified
-  server-side via HMAC signature before an order is ever written to the
-  database — the client's word alone is never trusted.
-- **Store subscription billing** is deliberately *not* automated. A store
-  owner pays the annual fee by scanning the platform's own UPI QR code
-  (`SubscriptionPaymentScreen`), then uploads a screenshot as proof
-  (`POST /api/stores/subscription/submit-proof`). A `platform_admin` account
-  (seeded as `platform@kahumbo.app` / `platform123` -- change this password)
-  reviews it and approves/rejects from either the mobile app's Approvals
-  screen or the `/admin` web page. Nothing auto-activates on upload -- a
-  screenshot alone can't be verified as a real, successful payment, so a
-  human always makes the final call. Set your real QR code from the `/admin`
-  page (Payment QR code section); a plain placeholder image is seeded until
-  you do. This intentionally trades instant activation for zero payment
-  gateway fees and full manual control over a once-a-year, low-volume flow.
+- **Customer order payments** are deliberately gateway-free, by design: each
+  store owner uploads their own UPI QR code (at registration, or later from
+  their Admin dashboard's "Order payment QR" card -- `PATCH /api/stores/me`
+  with `order_qr_image_base64`/`order_upi_id`). At checkout, a customer
+  picks either **Cash on Delivery** (settled in person) or **Pay online**
+  (shows the store's QR, they scan it in their own UPI app, then tap
+  "I've paid" to place the order). Neither path is automatically verified
+  -- there is no payment gateway integration in this app -- so the store
+  owner is the one who confirms money actually landed, typically by
+  checking their own UPI app before advancing an order past "confirmed".
+  If a store hasn't uploaded a QR yet, "Pay online" is disabled and greyed
+  out at checkout, and only Cash on Delivery is offered.
+- **Store subscription billing** works the same way, one level up: the
+  platform owner (you) uploads your own QR code (via the `/admin` web page
+  or the mobile app's Platform Admin screen -- `GET`/`POST /api/platform/qr-code`),
+  a store owner scans it to pay their annual fee, then uploads a screenshot
+  as proof (`POST /api/stores/subscription/submit-proof`). A `platform_admin`
+  account (seeded as `gkgst2026@gmail.com` -- change this password once
+  you're using it for real) reviews it and approves/rejects from either the
+  mobile app's Approvals screen or the `/admin` web page. Nothing
+  auto-activates on upload -- a screenshot alone can't be verified as a
+  real, successful payment, so a human always makes the final call. The fee
+  itself compounds 10% on every approved renewal (see `routes/platform.js`).
+  The QR upload flow on both `/admin` and the mobile Platform Admin screen
+  is flexible: if no QR is set yet, it prompts you to upload one; if one
+  already exists, it's shown first with a "change" option below it, so you
+  can update it any time (e.g. if you switch UPI accounts). A placeholder
+  image is seeded until you upload your real one. This intentionally trades
+  instant activation for zero payment gateway fees and full manual control
+  over both the once-a-year subscription flow and everyday order payments.
 - **Order confirmation emails** are optional and off by default. Set
   `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` in
   `backend/.env` to turn them on (see `.env.example` for a Gmail example

@@ -1,7 +1,8 @@
 // screens/StoreRegisterScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Image } from 'react-native';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, type, radius } from '../theme';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +22,12 @@ export default function StoreRegisterScreen({ navigation }) {
   const [locating, setLocating] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // The store's own order-payment QR -- optional at registration, shown to
+  // customers at checkout as "Pay online" once set (see routes/menu.js). A
+  // store can also add or change this later from the Admin dashboard.
+  const [qrImage, setQrImage] = useState(null); // { uri, base64, mime } | null
+  const [upiId, setUpiId] = useState('');
+
   async function handleCaptureLocation() {
     setLocating(true);
     try {
@@ -35,6 +42,23 @@ export default function StoreRegisterScreen({ navigation }) {
       showAlert('Could not get location', err.message);
     } finally {
       setLocating(false);
+    }
+  }
+
+  async function pickQrImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Photo access needed', 'Allow photo library access to add your payment QR code.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      setQrImage({ uri: asset.uri, base64: asset.base64, mime: asset.mimeType || 'image/jpeg' });
     }
   }
 
@@ -60,6 +84,8 @@ export default function StoreRegisterScreen({ navigation }) {
         zip: zip.trim(),
         lat: coords.lat,
         lng: coords.lng,
+        order_qr_image_base64: qrImage ? `data:${qrImage.mime};base64,${qrImage.base64}` : undefined,
+        order_upi_id: upiId.trim() || undefined,
       });
       showAlert(
         'Store registered',
@@ -117,6 +143,20 @@ export default function StoreRegisterScreen({ navigation }) {
         <TextInput style={[styles.input, { flex: 1 }]} value={zip} onChangeText={setZip} placeholder="ZIP" placeholderTextColor={colors.textMuted} />
       </View>
 
+      <Text style={styles.section}>Payment QR (optional)</Text>
+      <Text style={[type.bodyMuted, { marginBottom: spacing(2) }]}>
+        Customers will be able to scan this at checkout to pay you directly. You can skip this now and add it later from your Admin dashboard.
+      </Text>
+      {qrImage && <Image source={{ uri: qrImage.uri }} style={styles.qrPreview} resizeMode="contain" />}
+      <Button
+        title={qrImage ? 'Choose a different QR image' : 'Upload your payment QR code'}
+        variant="outline"
+        onPress={pickQrImage}
+        style={{ marginTop: spacing(1) }}
+      />
+      <Text style={[styles.label, { marginTop: spacing(3) }]}>UPI ID (optional)</Text>
+      <TextInput style={styles.input} value={upiId} onChangeText={setUpiId} placeholder="yourname@upi" autoCapitalize="none" placeholderTextColor={colors.textMuted} />
+
       <Text style={[type.caption, { marginTop: spacing(4) }]}>
         Important: once submitted, your account email and store address are permanent and can't be
         changed. This keeps one subscription tied to one physical store -- if you're opening
@@ -151,4 +191,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
   },
+  qrPreview: { width: 160, height: 160, borderRadius: radius.md, marginTop: spacing(2), backgroundColor: colors.surface },
 });

@@ -1,6 +1,7 @@
 // screens/AdminDashboardScreen.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl, Switch, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl, Switch, TextInput, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
@@ -76,6 +77,7 @@ export default function AdminDashboardScreen({ navigation }) {
       ) : (
         <>
           <StoreAvailabilityCard store={store} onUpdated={(s) => setStore(s)} />
+          <OrderQrCard store={store} onUpdated={(s) => setStore(s)} />
 
           <View style={styles.grid}>
             <StatCard label="Active orders" value={stats?.activeOrders ?? '--'} />
@@ -244,6 +246,93 @@ function StoreAvailabilityCard({ store, onUpdated }) {
   );
 }
 
+function OrderQrCard({ store, onUpdated }) {
+  const [qrImage, setQrImage] = useState(null); // { uri, base64, mime } picked but not yet saved
+  const [upiId, setUpiId] = useState(store?.order_upi_id || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setUpiId(store?.order_upi_id || '');
+  }, [store?.order_upi_id]);
+
+  async function pickImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Photo access needed', 'Allow photo library access to add your payment QR code.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      setQrImage({ uri: asset.uri, base64: asset.base64, mime: asset.mimeType || 'image/jpeg' });
+    }
+  }
+
+  async function save() {
+    if (!qrImage && upiId === (store?.order_upi_id || '')) return;
+    setSaving(true);
+    try {
+      const { store: s } = await api.updateStore({
+        order_qr_image_base64: qrImage ? `data:${qrImage.mime};base64,${qrImage.base64}` : undefined,
+        order_upi_id: upiId.trim() || null,
+      });
+      onUpdated(s);
+      setQrImage(null);
+      showAlert('Saved', 'Your order-payment QR code has been updated.');
+    } catch (err) {
+      showAlert('Could not save', err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!store) return null;
+  const hasQr = !!store.order_qr_image_base64;
+
+  return (
+    <View style={[styles.card, { marginTop: spacing(5) }]}>
+      <Text style={type.h2}>Order payment QR</Text>
+      <Text style={[type.bodyMuted, { marginTop: spacing(1) }]}>
+        Shown to customers at checkout as "Pay online". Without one set, customers only see Cash on Delivery.
+      </Text>
+
+      {qrImage ? (
+        <Image source={{ uri: qrImage.uri }} style={styles.qrImage} resizeMode="contain" />
+      ) : hasQr ? (
+        <Image source={{ uri: store.order_qr_image_base64 }} style={styles.qrImage} resizeMode="contain" />
+      ) : (
+        <View style={[styles.qrImage, styles.qrPlaceholder]}>
+          <Text style={type.bodyMuted}>No QR code set yet</Text>
+        </View>
+      )}
+
+      <Text style={[styles.hoursLabel, { marginTop: spacing(4) }]}>UPI ID (optional)</Text>
+      <TextInput
+        style={styles.hoursInput}
+        value={upiId}
+        onChangeText={setUpiId}
+        placeholder="yourname@upi"
+        placeholderTextColor={colors.textMuted}
+        autoCapitalize="none"
+      />
+
+      <Button
+        title={qrImage ? 'Choose a different image' : hasQr ? 'Change QR code' : 'Upload QR code'}
+        variant="outline"
+        onPress={pickImage}
+        style={{ marginTop: spacing(3) }}
+      />
+      {(qrImage || upiId !== (store?.order_upi_id || '')) && (
+        <Button title="Save" onPress={save} loading={saving} style={{ marginTop: spacing(2) }} />
+      )}
+    </View>
+  );
+}
+
 function StatCard({ label, value, wide }) {
   return (
     <View style={[styles.statCard, wide && { flexBasis: '100%' }]}>
@@ -289,4 +378,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
   },
+  qrImage: { width: 180, height: 180, borderRadius: radius.sm, marginTop: spacing(3), alignSelf: 'center', backgroundColor: colors.bg },
+  qrPlaceholder: { alignItems: 'center', justifyContent: 'center' },
 });

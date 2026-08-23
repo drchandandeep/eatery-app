@@ -10,13 +10,15 @@ import {
   RefreshControl,
   Pressable,
   Switch,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
 import { showAlert } from '../utils/alert';
 
-const emptyItemForm = { name: '', description: '', base_price: '', is_veg: true };
+const emptyItemForm = { name: '', description: '', base_price: '', is_veg: true, image_url: null };
 
 export default function AdminMenuScreen({ navigation }) {
   const [categories, setCategories] = useState([]);
@@ -91,6 +93,7 @@ export default function AdminMenuScreen({ navigation }) {
         description: itemForm.description.trim(),
         base_price: Number(itemForm.base_price),
         is_veg: itemForm.is_veg,
+        image_url: itemForm.image_url || undefined,
       });
       setAddingItemTo(null);
       setItemForm(emptyItemForm);
@@ -107,6 +110,7 @@ export default function AdminMenuScreen({ navigation }) {
       description: item.description || '',
       base_price: String(item.base_price),
       is_veg: !!item.is_veg,
+      image_url: item.image_url || null,
     });
   }
 
@@ -121,6 +125,7 @@ export default function AdminMenuScreen({ navigation }) {
         description: editForm.description.trim(),
         base_price: Number(editForm.base_price),
         is_veg: editForm.is_veg,
+        image_url: editForm.image_url || null,
       });
       setEditingItemId(null);
       load();
@@ -277,6 +282,13 @@ function ItemRow({ item, editing, editForm, setEditForm, onStartEdit, onCancelEd
   }
   return (
     <View style={styles.itemRow}>
+      {item.image_url ? (
+        <Image source={{ uri: item.image_url }} style={styles.thumb} />
+      ) : (
+        <View style={[styles.thumb, styles.thumbPlaceholder]}>
+          <Text style={styles.thumbInitial}>{item.name?.[0]?.toUpperCase() || '?'}</Text>
+        </View>
+      )}
       <View style={{ flex: 1 }}>
         <Text style={[type.body, !item.is_available && { color: colors.textMuted }]}>
           {item.name} {!item.is_available && '(hidden)'}
@@ -301,8 +313,41 @@ function ItemRow({ item, editing, editForm, setEditForm, onStartEdit, onCancelEd
 }
 
 function ItemForm({ form, setForm, onCancel, onSubmit, submitLabel }) {
+  async function pickImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Photo access needed', 'Allow photo library access to add a picture for this item.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.6,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      const mime = asset.mimeType || 'image/jpeg';
+      setForm((f) => ({ ...f, image_url: `data:${mime};base64,${asset.base64}` }));
+    }
+  }
+
   return (
     <View style={styles.itemForm}>
+      <Text style={styles.label}>Photo</Text>
+      {form.image_url ? (
+        <Image source={{ uri: form.image_url }} style={styles.formImagePreview} />
+      ) : (
+        <View style={[styles.formImagePreview, styles.thumbPlaceholder]}>
+          <Text style={styles.thumbInitial}>No photo</Text>
+        </View>
+      )}
+      <View style={{ flexDirection: 'row', gap: spacing(2), marginTop: spacing(2) }}>
+        <Button title={form.image_url ? 'Change photo' : 'Add photo'} variant="outline" onPress={pickImage} style={{ flex: 1 }} />
+        {form.image_url && (
+          <Button title="Remove" variant="outline" onPress={() => setForm((f) => ({ ...f, image_url: null }))} style={{ flex: 1 }} />
+        )}
+      </View>
+
       <Text style={styles.label}>Name</Text>
       <TextInput
         style={styles.input}
@@ -317,7 +362,7 @@ function ItemForm({ form, setForm, onCancel, onSubmit, submitLabel }) {
         onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
         placeholderTextColor={colors.textMuted}
       />
-      <Text style={styles.label}>Price ($)</Text>
+      <Text style={styles.label}>Price (₹)</Text>
       <TextInput
         style={styles.input}
         value={form.base_price}
@@ -358,10 +403,15 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing(3),
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingVertical: spacing(3),
   },
+  thumb: { width: 52, height: 52, borderRadius: radius.sm },
+  thumbPlaceholder: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  thumbInitial: { color: colors.textMuted, fontWeight: '700', fontSize: 12 },
+  formImagePreview: { width: '100%', height: 160, borderRadius: radius.md, marginTop: spacing(1) },
   itemActions: { alignItems: 'center', gap: spacing(2) },
   editLink: { color: colors.accentSoft, fontWeight: '700', fontSize: 12 },
   deleteLink: { color: colors.danger, fontWeight: '700', fontSize: 12 },

@@ -96,7 +96,7 @@ router.get('/menu', (req, res) => {
 
 // POST /api/admin/menu/items
 router.post('/menu/items', (req, res) => {
-  const { category_id, name, description, base_price, is_veg } = req.body;
+  const { category_id, name, description, base_price, is_veg, image_url } = req.body;
   if (!name || base_price == null) return res.status(400).json({ error: 'name and base_price are required' });
 
   if (category_id) {
@@ -106,9 +106,9 @@ router.post('/menu/items', (req, res) => {
 
   const itemId = nanoid(12);
   db.prepare(
-    `INSERT INTO menu_items (id, store_id, category_id, name, description, base_price, is_veg)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(itemId, req.user.store_id, category_id || null, name, description || '', base_price, is_veg ? 1 : 0);
+    `INSERT INTO menu_items (id, store_id, category_id, name, description, base_price, image_url, is_veg)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(itemId, req.user.store_id, category_id || null, name, description || '', base_price, image_url || null, is_veg ? 1 : 0);
 
   res.status(201).json({ item: db.prepare('SELECT * FROM menu_items WHERE id = ?').get(itemId) });
 });
@@ -118,7 +118,7 @@ router.patch('/menu/items/:id', (req, res) => {
   const item = db.prepare('SELECT * FROM menu_items WHERE id = ? AND store_id = ?').get(req.params.id, req.user.store_id);
   if (!item) return res.status(404).json({ error: 'Item not found' });
 
-  const fields = ['category_id', 'name', 'description', 'base_price', 'is_available', 'is_veg'];
+  const fields = ['category_id', 'name', 'description', 'base_price', 'is_available', 'is_veg', 'image_url'];
   const updates = fields.filter((f) => f in req.body);
   if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' });
 

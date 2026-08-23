@@ -9,8 +9,25 @@ const { nanoid } = require('nanoid');
 const bcrypt = require('bcryptjs');
 const db = require('./database');
 const placeholderQr = require('./placeholderQr');
+const itemImages = require('./itemImages');
 
 const id = () => nanoid(12);
+
+// Item name -> photo, for the handful of items the store owner has supplied
+// a real product photo for. Everything else gets no image_url (the mobile
+// app falls back to a letter-initial placeholder for those, see
+// mobile/src/components/MenuItemCard.js). Add more names here as more
+// photos come in -- addItem/addSizedItem below both look this up
+// automatically, no other code needs to change.
+const ITEM_IMAGE_BY_NAME = {
+  'Jamun Shot': itemImages.jamun_shot,
+  'Pop Shots Combo (Any 6 Flavours, on stick)': itemImages.pop_shots,
+  'Guava Fruit': itemImages.guava_frost,
+  'Pineapple Fruit': itemImages.pineapple_frost,
+  'Orange Fruit': itemImages.orange_frost,
+  'Mango Shot': itemImages.mango_promo,
+  'Caramel Latte Iced Coffee': itemImages.ice_latte,
+};
 
 function run() {
   const storeCount = db.prepare('SELECT COUNT(*) c FROM stores').get().c;
@@ -84,7 +101,7 @@ function run() {
 
   // Everything on this menu is vegetarian.
   function addItem(categoryName, name, price, description = '') {
-    insertItem.run(id(), storeId, categories[categoryName], name, description, price, null, 1);
+    insertItem.run(id(), storeId, categories[categoryName], name, description, price, ITEM_IMAGE_BY_NAME[name] || null, 1);
   }
 
   // For items sold in two sizes (e.g. Fruit Shots' 70ml-4pcs vs Big Shot, or
@@ -94,7 +111,7 @@ function run() {
   function addSizedItem(categoryName, name, sizes, description = '') {
     const basePrice = sizes[0][1];
     const itemId = id();
-    insertItem.run(itemId, storeId, categories[categoryName], name, description, basePrice, null, 1);
+    insertItem.run(itemId, storeId, categories[categoryName], name, description, basePrice, ITEM_IMAGE_BY_NAME[name] || null, 1);
     if (sizes.length > 1) {
       const groupId = id();
       insertGroup.run(groupId, itemId, 'Size', 1, 1, 1);

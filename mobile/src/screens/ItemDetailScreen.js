@@ -1,6 +1,6 @@
 // screens/ItemDetailScreen.js
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Image } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
@@ -91,6 +91,7 @@ export default function ItemDetailScreen({ route, navigation }) {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
+        {item.image_url && <Image source={{ uri: item.image_url }} style={styles.heroImage} resizeMode="cover" />}
         <Text style={type.display}>{item.name}</Text>
         <Text style={[type.bodyMuted, { marginTop: spacing(2), marginBottom: spacing(5) }]}>{item.description}</Text>
 
@@ -129,6 +130,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing(5), paddingBottom: spacing(10) },
+  heroImage: { width: '100%', height: 220, borderRadius: radius.md, marginBottom: spacing(4), backgroundColor: colors.surface },
   group: { marginBottom: spacing(5) },
   groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(2) },
   requiredTag: { color: colors.accent, fontSize: 12, fontWeight: '700' },

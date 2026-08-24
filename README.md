@@ -1,5 +1,10 @@
 # Kahumbo
 
+> **Orders are allowed up to 7km from the store.** There's no minimum --
+> a store can serve just its own street or neighbourhood, right up to a
+> 7km cap. See `backend/utils/config.js` for the single source of truth on
+> this range.
+
 A full-stack, **multi-store** food-ordering platform: stores register and
 pay an annual subscription, customers sign up for free (tied to one nearby
 store), menu browsing with item customization, cart & checkout, live order
@@ -16,7 +21,8 @@ eatery-app/
 
 - **Stores pay, customers don't.** A store owner registers via
   `POST /api/stores/register` with an email + the store's address, then
-  activates an **annual** subscription (`POST /api/stores/subscribe`).
+  activates an **annual** subscription by paying via the platform's own QR
+  code and uploading proof (`POST /api/stores/subscription/submit-proof`).
   Customer signup and ordering are always free.
 - **Email + store address are permanent.** Once a store registers, its
   owner email and physical address can never be changed by any API
@@ -24,12 +30,14 @@ eatery-app/
   stops one paid account being re-pointed at a different physical location
   to avoid paying for a second store -- a new location needs a new email
   and its own subscription.
-- **Customers are geofenced to one store.** Signup requires picking a
-  specific store and submitting an address with coordinates
-  (`lat`/`lng`, e.g. from the device's GPS). The backend rejects the
-  signup if that address is more than the store's service radius
-  (5-6km, capped at 6km) from the store. The customer's store link and
-  registration address are then locked for that account, same as above.
+- **Customers are geofenced to one store, up to 7km, no minimum.**
+  Signup requires picking a specific store and submitting an address with
+  coordinates (`lat`/`lng`, e.g. from the device's GPS). The backend
+  rejects the signup if that address is further than the store's service
+  radius (any value up to 7km -- a store can legitimately set this
+  smaller, e.g. to serve just its own neighbourhood) from the store. The
+  customer's store link and registration address are then locked for that
+  account, same as above.
 - **Subscription gates store features, not customer ordering.** If a
   store's annual subscription lapses, `/api/admin/*` (menu management,
   order handling, stats) responds `402` until it's renewed. Customers on
@@ -161,7 +169,7 @@ machine pointed at that deployed backend URL.
 |---|---|
 | Store registration (locked email + address) | `StoreRegisterScreen` + `POST /api/stores/register` |
 | Annual store subscription (own-QR + manual approval) | `SubscriptionPaymentScreen` + `POST /api/stores/subscription/submit-proof`, approved via `PlatformAdminScreen` or the `/admin` web page |
-| Nearby-store lookup (5-10km geofence) | `SignupScreen` + `GET /api/stores/nearby` |
+| Nearby-store lookup (up to 7km, no minimum) | `SignupScreen` + `GET /api/stores/nearby` |
 | Customer signup locked to one store, email or phone login | `SignupScreen`, `LoginScreen` + `POST /api/auth/signup`, `POST /api/auth/login` |
 | Menu browsing by category, scoped per store | `MenuScreen` + `GET /api/menu?store_id=` |
 | Item customization (size, crust, toppings, etc.) | `ItemDetailScreen` + `option_groups`/`option_choices` tables |

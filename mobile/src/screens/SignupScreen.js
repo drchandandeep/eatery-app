@@ -32,7 +32,7 @@ export default function SignupScreen({ navigation }) {
       if (status !== 'granted') {
         showAlert(
           'Location needed',
-          'We use your location only to confirm you\u2019re within a store\u2019s delivery area (up to 10km). Please allow location access.'
+          'We use your location only to confirm you\u2019re within a store\u2019s delivery area (up to 7km). Please allow location access.'
         );
         return;
       }
@@ -42,10 +42,10 @@ export default function SignupScreen({ navigation }) {
       setCoords({ lat, lng });
 
       setFindingStores(true);
-      const { stores } = await api.nearbyStores(lat, lng, 10);
+      const { stores } = await api.nearbyStores(lat, lng, 7);
       setNearbyStores(stores);
       if (stores.length === 0) {
-        showAlert('No stores nearby', 'There are no active stores within 6km of your current location yet.');
+        showAlert('No stores nearby', 'There are no active stores within 7km of your current location yet.');
       }
     } catch (err) {
       showAlert('Could not get location', err.message);
@@ -98,6 +98,9 @@ export default function SignupScreen({ navigation }) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={type.display}>Create account</Text>
+      <View style={styles.rangeBanner}>
+        <Text style={styles.rangeBannerText}>Orders allowed up to 7km from the store</Text>
+      </View>
       <Text style={[type.bodyMuted, { marginBottom: spacing(6) }]}>
         Ordering is free for customers -- just pick your local store
       </Text>
@@ -155,8 +158,8 @@ export default function SignupScreen({ navigation }) {
       </View>
 
       <Text style={[type.caption, { marginTop: spacing(5) }]}>
-        We only serve customers within 5-6km of a registered store, so we need your current
-        location to check which stores are in range. This is captured once at signup and can't
+        We only serve customers within 7km of a registered store, so we need your current
+        location to check whether you're in range. This is captured once at signup and can't
         be changed afterward.
       </Text>
       <Button
@@ -194,6 +197,18 @@ export default function SignupScreen({ navigation }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing(6), paddingVertical: spacing(10) },
+  rangeBanner: {
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing(2.5),
+    paddingHorizontal: spacing(4),
+    marginTop: spacing(3),
+    marginBottom: spacing(3),
+    alignSelf: 'flex-start',
+  },
+  rangeBannerText: { color: colors.accent, fontWeight: '700', fontSize: 13 },
   label: { ...type.caption, marginTop: spacing(4), marginBottom: spacing(1.5) },
   input: {
     backgroundColor: colors.surface,

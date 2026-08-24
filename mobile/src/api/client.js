@@ -36,7 +36,7 @@ export const api = {
   updateMyCredentials: (payload) => request('/auth/me', { method: 'PATCH', body: payload }),
 
   // stores
-  nearbyStores: (lat, lng, radiusKm = 10) =>
+  nearbyStores: (lat, lng, radiusKm = 7) =>
     request(`/stores/nearby?lat=${lat}&lng=${lng}&radius_km=${radiusKm}`),
   registerStore: (payload) => request('/stores/register', { method: 'POST', body: payload }),
   myStore: () => request('/stores/me'),

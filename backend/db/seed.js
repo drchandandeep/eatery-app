@@ -284,7 +284,7 @@ function run() {
   db.prepare(
     `INSERT INTO addresses (id, user_id, label, line1, city, zip, lat, lng, is_default, is_registration_address)
      VALUES (?, ?, 'Home', ?, ?, ?, ?, ?, 1, 1)`
-  ).run(id(), customerId, '450 Oak Avenue', 'Springfield', '62701', 39.79, -89.645);
+  ).run(id(), customerId, 'VIP Road', 'Zirakpur', '140603', 30.647, 76.812);
 
   // Platform admin -- this is YOUR login (the platform owner, not any one
   // store). It reviews subscription payment screenshots and sets the

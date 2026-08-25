@@ -6,6 +6,7 @@ import Button from '../components/Button';
 import { useCart } from '../context/CartContext';
 import { api } from '../api/client';
 import { showAlert } from '../utils/alert';
+import { buildUpiUri, openUpiApp } from '../utils/upi';
 
 // Client-side estimate only, shown before the order is placed -- the real,
 // authoritative total is always recomputed server-side (see
@@ -14,22 +15,31 @@ import { showAlert } from '../utils/alert';
 const TAX_RATE = 0.05; // India GST for restaurants (non-AC/composition scheme)
 const DELIVERY_FEE = 100; // flat delivery fee in rupees -- must match backend/utils/config.js
 
-// Neither payment method here is verified by a gateway -- the store's own
-// QR is scanned in the customer's own UPI app and confirmed by tapping
-// "I've paid, place order"; Cash on Delivery is settled in person. The
-// store owner is the one who actually knows when money has landed, and
-// confirms that by advancing the order's status (see AdminOrdersScreen).
+// Neither payment method here is verified by a gateway -- "Pay online"
+// jumps straight into the customer's own UPI app (GPay/PhonePe/etc, via a
+// upi://pay deep link) with the store's UPI ID and the exact amount
+// pre-filled, so they just confirm and pay -- no manual QR scanning needed
+// on the same phone. The store's QR image is still shown as a fallback for
+// when no UPI ID is set or no UPI app can be opened. Cash on Delivery is
+// settled in person. Either way, the store owner is the one who actually
+// knows when money has landed, and confirms that by advancing the order's
+// status (see AdminOrdersScreen) -- there's no payment gateway in this app.
 export default function CheckoutScreen({ navigation }) {
   const { lines, subtotal, clearCart } = useCart();
   const [address, setAddress] = useState('');
   const [payment, setPayment] = useState('cash');
   const [placing, setPlacing] = useState(false);
   const [storeQr, setStoreQr] = useState(null); // { image_base64, upi_id } | null
+  const [storeName, setStoreName] = useState('');
+  const [upiAttempted, setUpiAttempted] = useState(false);
 
   useEffect(() => {
     api
       .getMenu()
-      .then((data) => setStoreQr(data.store_order_qr || null))
+      .then((data) => {
+        setStoreQr(data.store_order_qr || null);
+        setStoreName(data.store_name || 'Kahumbo');
+      })
       .catch(() => {});
   }, []);
 
@@ -51,6 +61,18 @@ export default function CheckoutScreen({ navigation }) {
       quantity: l.quantity,
       selected_options: l.selected_options,
     }));
+  }
+
+  async function handleOpenUpiApp() {
+    const uri = buildUpiUri({ upiId: storeQr?.upi_id, payeeName: storeName, amount: total, note: `Order at ${storeName}` });
+    const opened = await openUpiApp(uri);
+    setUpiAttempted(true);
+    if (!opened) {
+      showAlert(
+        'Could not open a UPI app',
+        'No UPI app was detected, or it could not be opened automatically. Please scan the QR code below instead.'
+      );
+    }
   }
 
   async function handlePlaceOrder() {
@@ -117,10 +139,25 @@ export default function CheckoutScreen({ navigation }) {
 
         {payment === 'qr' && storeQr && (
           <View style={styles.qrCard}>
+            {storeQr.upi_id ? (
+              <>
+                <Button
+                  title={`Pay \u20b9${Math.round(total)} \u2014 Open UPI App`}
+                  onPress={handleOpenUpiApp}
+                  style={{ width: '100%' }}
+                />
+                <Text style={[type.caption, { marginTop: spacing(3), textAlign: 'center' }]}>
+                  This opens your UPI app (GPay, PhonePe, etc.) with the amount already filled in.
+                  Prefer to scan instead? Use the QR code below.
+                </Text>
+              </>
+            ) : null}
             <Image source={{ uri: storeQr.image_base64 }} style={styles.qrImage} resizeMode="contain" />
             {storeQr.upi_id && <Text style={[type.bodyMuted, { marginTop: spacing(2) }]}>UPI ID: {storeQr.upi_id}</Text>}
             <Text style={[type.caption, { marginTop: spacing(2), textAlign: 'center' }]}>
-              Scan this in your UPI app, pay ₹{Math.round(total)}, then tap "Place order" below once you've paid.
+              {upiAttempted
+                ? 'Once you\u2019ve completed the payment, tap "Place order" below.'
+                : `Scan this in your UPI app, pay \u20b9${Math.round(total)}, then tap "Place order" below once you've paid.`}
             </Text>
           </View>
         )}

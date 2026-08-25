@@ -109,7 +109,14 @@ export default function MenuScreen({ navigation }) {
         renderItem={({ item }) => (
           <MenuItemCard item={item} onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })} />
         )}
-        ListEmptyComponent={<Text style={type.bodyMuted}>Nothing here yet.</Text>}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>Menu coming soon</Text>
+            <Text style={type.bodyMuted}>
+              This store hasn't added any items yet. Check back shortly, or contact the store directly.
+            </Text>
+          </View>
+        }
       />
     </View>
   );
@@ -156,5 +163,7 @@ const styles = StyleSheet.create({
   },
   closedBannerTitle: { fontWeight: '700', fontSize: 14, color: colors.text, marginBottom: spacing(1) },
   closedBannerText: { fontSize: 13, color: colors.textMuted },
+  emptyState: { paddingHorizontal: spacing(5), paddingTop: spacing(10), alignItems: 'center' },
+  emptyStateTitle: { fontWeight: '700', fontSize: 16, color: colors.text, marginBottom: spacing(1.5) },
   list: { paddingHorizontal: spacing(5), paddingBottom: spacing(10) },
 });

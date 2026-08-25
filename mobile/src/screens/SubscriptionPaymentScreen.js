@@ -12,6 +12,7 @@ import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
 import Button from '../components/Button';
 import { showAlert } from '../utils/alert';
+import { buildUpiUri, openUpiApp } from '../utils/upi';
 
 const STATUS_LABEL = {
   pending: 'Pending review',
@@ -33,6 +34,20 @@ export default function SubscriptionPaymentScreen({ navigation }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const [upiAttempted, setUpiAttempted] = useState(false);
+
+  async function handleOpenUpiApp() {
+    const uri = buildUpiUri({ upiId: qr?.upi_id, payeeName: 'Kahumbo', amount: qr?.amount, note: 'Annual subscription' });
+    const opened = await openUpiApp(uri);
+    setUpiAttempted(true);
+    if (!opened) {
+      showAlert(
+        'Could not open a UPI app',
+        'No UPI app was detected, or it could not be opened automatically. Please scan the QR code above instead.'
+      );
+    }
+  }
 
   async function pickScreenshot() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -86,8 +101,22 @@ export default function SubscriptionPaymentScreen({ navigation }) {
           <ActivityIndicator color={colors.accent} />
         ) : qr?.qr_image_base64 ? (
           <>
+            {qr.upi_id && (
+              <Button
+                title={qr.amount ? `Pay \u20b9${Math.round(qr.amount)} \u2014 Open UPI App` : 'Pay \u2014 Open UPI App'}
+                onPress={handleOpenUpiApp}
+                style={{ width: '100%', marginBottom: spacing(4) }}
+              />
+            )}
             <Image source={{ uri: qr.qr_image_base64 }} style={styles.qrImage} resizeMode="contain" />
             {qr.upi_id && <Text style={[type.bodyMuted, { marginTop: spacing(3), textAlign: 'center' }]}>UPI ID: {qr.upi_id}</Text>}
+            {qr.upi_id && (
+              <Text style={[type.caption, { marginTop: spacing(2), textAlign: 'center' }]}>
+                {upiAttempted
+                  ? "Once you've completed the payment, upload a screenshot below."
+                  : 'Tap the button above to pay directly, or scan this QR instead.'}
+              </Text>
+            )}
           </>
         ) : (
           <Text style={type.bodyMuted}>

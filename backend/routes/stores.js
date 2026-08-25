@@ -253,9 +253,11 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
 router.get('/subscription-qr', requireAuth, requireStoreAdmin, (req, res) => {
   const qr = db.prepare("SELECT value FROM platform_settings WHERE key = 'qr_image_base64'").get();
   const upiId = db.prepare("SELECT value FROM platform_settings WHERE key = 'upi_id'").get();
+  const store = db.prepare('SELECT annual_fee FROM stores WHERE id = ?').get(req.user.store_id);
   res.json({
     qr_image_base64: qr?.value || null,
     upi_id: upiId?.value || null,
+    amount: store?.annual_fee || null,
   });
 });
 

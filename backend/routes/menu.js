@@ -50,6 +50,7 @@ router.get('/', softAuth, (req, res) => {
 
   res.json({
     store_id: storeId,
+    store_name: store?.name || null,
     store_active: store ? effectiveStoreStatus(store) === 'active' : false, // kept for backwards compatibility
     store_open: orderingStatus.open,
     store_closed_reason: orderingStatus.open ? null : orderingStatus.reason,

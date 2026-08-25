@@ -180,6 +180,17 @@ export default function AdminMenuScreen({ navigation }) {
         Changes here go live for customers immediately.
       </Text>
 
+      {categories.length === 0 && uncategorized.length === 0 && (
+        <View style={styles.welcomeCard}>
+          <Text style={styles.welcomeTitle}>Let's build your menu</Text>
+          <Text style={type.bodyMuted}>
+            Your store doesn't have any menu items yet -- customers won't see anything to order
+            until you add some. Start by creating a category below (e.g. "Starters", "Drinks"),
+            then add items inside it.
+          </Text>
+        </View>
+      )}
+
       {categories.map((cat) => (
         <View key={cat.id} style={styles.categoryBlock}>
           <View style={styles.categoryHeader}>
@@ -386,6 +397,15 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing(5), paddingTop: spacing(14), paddingBottom: spacing(10) },
+  welcomeCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing(4),
+    marginBottom: spacing(5),
+  },
+  welcomeTitle: { fontWeight: '700', fontSize: 16, color: colors.text, marginBottom: spacing(1.5) },
   categoryBlock: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,

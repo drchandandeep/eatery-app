@@ -185,6 +185,21 @@ CREATE TABLE IF NOT EXISTS subscription_payment_requests (
   reviewed_at TEXT,
   reviewed_by TEXT
 );
+
+-- One-time codes emailed to a user's registered address, for two flows:
+-- 'forgot' (not logged in, resetting a lost password) and 'change' (logged
+-- in, changing password with an extra verification step). purpose keeps
+-- the two from being interchangeable -- a code requested for one flow
+-- can't be used to complete the other.
+CREATE TABLE IF NOT EXISTS password_otps (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  purpose TEXT NOT NULL, -- 'forgot' | 'change'
+  expires_at TEXT NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // Safe, idempotent migration: databases created before payment tracking was

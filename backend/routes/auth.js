@@ -8,6 +8,8 @@ const { requireAuth, JWT_SECRET } = require('../middleware/auth');
 const { haversineKm, isValidCoordinate } = require('../utils/geo');
 const { effectiveStoreStatus: effectiveStatus } = require('../utils/subscription');
 const { MAX_SERVICE_RADIUS_KM } = require('../utils/config');
+const { sendCustomerWelcomeEmail, sendOtpEmail } = require('../utils/email');
+const { createOtp, verifyAndConsumeOtp, OTP_TTL_MINUTES } = require('../utils/otp');
 
 const router = express.Router();
 
@@ -81,6 +83,9 @@ router.post('/signup', (req, res) => {
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
   const token = signToken(user);
+
+  sendCustomerWelcomeEmail(user.email, user.name, store.name).catch(() => {});
+
   res.status(201).json({
     token,
     user: { id: user.id, name: user.name, email: user.email, role: user.role, store_id: user.store_id },
@@ -167,6 +172,91 @@ router.patch('/me', requireAuth, (req, res) => {
   const updated = db.prepare('SELECT id, name, email, phone, role, store_id FROM users WHERE id = ?').get(user.id);
   const token = signToken(updated);
   res.json({ token, user: updated, message: 'Login details updated.' });
+});
+
+// ---- Forgot password (not logged in) ----
+// Two-step: request a code emailed to the account's registered address,
+// then submit that code + a new password to actually reset it.
+
+// POST /api/auth/forgot-password/request  { identifier }
+// Always responds with the same generic message regardless of whether the
+// identifier matched a real account -- this avoids letting someone probe
+// which emails/phones have accounts just by watching the response differ.
+router.post('/forgot-password/request', (req, res) => {
+  const identifier = (req.body.identifier || '').trim();
+  if (!identifier) return res.status(400).json({ error: 'identifier is required' });
+
+  const looksLikeEmail = identifier.includes('@');
+  const user = looksLikeEmail
+    ? db.prepare('SELECT * FROM users WHERE email = ?').get(identifier.toLowerCase())
+    : db.prepare('SELECT * FROM users WHERE phone = ?').get(identifier);
+
+  if (user && user.email) {
+    const code = createOtp(user.id, 'forgot');
+    sendOtpEmail(user.email, code, 'forgot').catch(() => {});
+  }
+
+  res.json({
+    message: 'If an account exists for that email/phone, a verification code has been emailed to its registered address.',
+  });
+});
+
+// POST /api/auth/forgot-password/reset  { identifier, otp, new_password }
+router.post('/forgot-password/reset', (req, res) => {
+  const identifier = (req.body.identifier || '').trim();
+  const { otp, new_password } = req.body;
+  if (!identifier || !otp || !new_password) {
+    return res.status(400).json({ error: 'identifier, otp and new_password are required' });
+  }
+  if (new_password.length < 6) return res.status(400).json({ error: 'new_password must be at least 6 characters' });
+
+  const looksLikeEmail = identifier.includes('@');
+  const user = looksLikeEmail
+    ? db.prepare('SELECT * FROM users WHERE email = ?').get(identifier.toLowerCase())
+    : db.prepare('SELECT * FROM users WHERE phone = ?').get(identifier);
+
+  if (!user || !verifyAndConsumeOtp(user.id, 'forgot', otp)) {
+    return res.status(400).json({ error: 'That code is invalid or has expired. Please request a new one.' });
+  }
+
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(new_password, 10), user.id);
+  res.json({ message: 'Password reset. You can now log in with your new password.' });
+});
+
+// ---- Change password (logged in, with an extra OTP verification step) ----
+// Works for any role (customer, store_admin, platform_admin) -- unlike
+// PATCH /me above, this only ever touches the password, never the email,
+// so it doesn't need the store_admin restriction that endpoint has.
+
+// POST /api/auth/password/request-otp  (authenticated)
+router.post('/password/request-otp', requireAuth, (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user || !user.email) {
+    return res.status(400).json({ error: 'Your account has no registered email to send a code to.' });
+  }
+  const code = createOtp(user.id, 'change');
+  sendOtpEmail(user.email, code, 'change').catch(() => {});
+  res.json({ message: `A verification code was sent to ${user.email}. It expires in ${OTP_TTL_MINUTES} minutes.` });
+});
+
+// POST /api/auth/password/change  (authenticated)  { current_password, new_password, otp }
+router.post('/password/change', requireAuth, (req, res) => {
+  const { current_password, new_password, otp } = req.body;
+  if (!current_password || !new_password || !otp) {
+    return res.status(400).json({ error: 'current_password, new_password and otp are all required' });
+  }
+  if (new_password.length < 6) return res.status(400).json({ error: 'new_password must be at least 6 characters' });
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user || !bcrypt.compareSync(current_password, user.password_hash)) {
+    return res.status(401).json({ error: 'current_password is incorrect' });
+  }
+  if (!verifyAndConsumeOtp(user.id, 'change', otp)) {
+    return res.status(400).json({ error: 'That verification code is invalid or has expired. Please request a new one.' });
+  }
+
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(new_password, 10), user.id);
+  res.json({ message: 'Password changed successfully.' });
 });
 
 module.exports = router;

@@ -1,6 +1,6 @@
 // screens/LoginScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { colors, spacing, type, radius } from '../theme';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
@@ -51,6 +51,10 @@ export default function LoginScreen({ navigation }) {
 
         <Button title="Log in" onPress={handleLogin} loading={loading} style={{ marginTop: spacing(4) }} />
 
+        <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ marginTop: spacing(3), alignSelf: 'center' }}>
+          <Text style={styles.forgotLink}>Forgot password?</Text>
+        </Pressable>
+
         <Button
           title="Create a customer account"
           variant="outline"
@@ -86,4 +90,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   hint: { ...type.caption, marginTop: spacing(5), textAlign: 'center' },
+  forgotLink: { color: colors.accent, fontWeight: '600', fontSize: 13 },
 });

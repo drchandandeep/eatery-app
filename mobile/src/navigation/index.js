@@ -23,6 +23,8 @@ import AdminOrdersScreen from '../screens/AdminOrdersScreen';
 import AdminMenuScreen from '../screens/AdminMenuScreen';
 import SubscriptionPaymentScreen from '../screens/SubscriptionPaymentScreen';
 import PlatformAdminScreen from '../screens/PlatformAdminScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 
 const AuthStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
@@ -90,6 +92,7 @@ function AppStack() {
       <RootStack.Screen name="AdminOrders" component={AdminOrdersScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="AdminMenu" component={AdminMenuScreen} options={{ headerShown: false }} />
       <RootStack.Screen name="SubscriptionPayment" component={SubscriptionPaymentScreen} options={{ headerShown: false }} />
+      <RootStack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: false }} />
     </RootStack.Navigator>
   );
 }
@@ -100,6 +103,7 @@ function LoginFlow() {
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Signup" component={SignupScreen} />
       <AuthStack.Screen name="StoreRegister" component={StoreRegisterScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </AuthStack.Navigator>
   );
 }
@@ -111,6 +115,7 @@ function PlatformAdminFlow() {
   return (
     <RootStack.Navigator screenOptions={screenOptions}>
       <RootStack.Screen name="PlatformAdmin" component={PlatformAdminScreen} options={{ headerShown: false }} />
+      <RootStack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: false }} />
     </RootStack.Navigator>
   );
 }

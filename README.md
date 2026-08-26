@@ -187,6 +187,33 @@ machine pointed at that deployed backend URL.
 
 ## Notes & next steps
 
+- **Every store shares the same standard Kahumbo menu.** `db/kahumboMenu.js`
+  holds the one true menu template (categories, items, prices, photos); it's
+  used both to seed the demo store and automatically for every real store at
+  `POST /api/stores/register`. A new store never starts with a blank menu --
+  the owner can still edit/add/remove items afterward from Admin > Manage
+  Menu if a location genuinely needs to differ.
+- **Reporting**: `GET /api/platform/reports` (platform-wide totals: stores,
+  orders, revenue) and `GET /api/platform/reports/:storeId` (one store's own
+  numbers) are platform_admin-only. Available on both the `/admin` web page
+  (dropdown) and the mobile Platform Admin screen (tap-to-select chips).
+  Revenue excludes cancelled orders.
+- **Forgot password**: `POST /api/auth/forgot-password/request` emails a
+  6-digit code (10 min expiry) to the account's registered address;
+  `POST /api/auth/forgot-password/reset` consumes it. Works for any role.
+- **Change password (logged in)**: `POST /api/auth/password/request-otp`
+  then `POST /api/auth/password/change` (needs current password + the
+  emailed code together). Works for every role, including store owners --
+  this is deliberately separate from `PATCH /api/auth/me` above, which only
+  handles the platform_admin/customer email-change case and still blocks
+  store_admin from touching their email.
+- **Transactional emails** now cover the full lifecycle, all through
+  `utils/email.js` and all silently skipped (never blocking) if SMTP isn't
+  configured: customer welcome on signup, subscription proof submitted,
+  subscription approved/rejected, new order (to the store owner) alongside
+  the existing order-confirmed (to the customer), and order confirmed/
+  delivered (to *both* customer and store owner).
+
 - **Annual subscription fee**: starts at Rs 60,000 and compounds 10% on every
   approved renewal (Year 1 Rs 60,000 -> Year 2 Rs 66,000 -> Year 3
   Rs 72,600...), set in `routes/platform.js`'s approve handler. This is

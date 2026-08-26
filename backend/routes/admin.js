@@ -6,6 +6,7 @@ const express = require('express');
 const { nanoid } = require('nanoid');
 const db = require('../db/database');
 const { requireAuth, requireStoreAdmin, requireActiveSubscription } = require('../middleware/auth');
+const { sendOrderStatusEmail } = require('../utils/email');
 
 const router = express.Router();
 router.use(requireAuth, requireStoreAdmin, requireActiveSubscription);
@@ -49,6 +50,20 @@ router.patch('/orders/:id/status', (req, res) => {
     );
   });
   tx();
+
+  // "Confirmed" and "delivered" are the two milestones worth emailing both
+  // the customer and the store owner about (placed already emails both, in
+  // routes/orders.js). Other in-between statuses (preparing, out for
+  // delivery) don't trigger email, to avoid over-notifying.
+  if (status === 'confirmed' || status === 'delivered') {
+    const statusLabel = status === 'confirmed' ? 'confirmed' : 'delivered';
+    const store = db.prepare('SELECT name FROM stores WHERE id = ?').get(req.user.store_id);
+    const customer = db.prepare('SELECT email FROM users WHERE id = ?').get(order.user_id);
+    const storeOwner = db.prepare("SELECT email FROM users WHERE store_id = ? AND role = 'store_admin'").get(req.user.store_id);
+    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+    if (customer) sendOrderStatusEmail(customer.email, updatedOrder, store?.name, statusLabel).catch(() => {});
+    if (storeOwner) sendOrderStatusEmail(storeOwner.email, updatedOrder, store?.name, statusLabel).catch(() => {});
+  }
 
   res.json({ order: db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id) });
 });

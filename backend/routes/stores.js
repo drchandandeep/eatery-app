@@ -8,6 +8,8 @@ const { requireAuth, requireStoreAdmin, JWT_SECRET } = require('../middleware/au
 const { haversineKm, isValidCoordinate } = require('../utils/geo');
 const { effectiveStoreStatus: effectiveStatus } = require('../utils/subscription');
 const { MIN_SERVICE_RADIUS_KM, MAX_SERVICE_RADIUS_KM, DEFAULT_SERVICE_RADIUS_KM } = require('../utils/config');
+const { createStandardMenu } = require('../db/kahumboMenu');
+const { sendSubscriptionSubmittedEmail } = require('../utils/email');
 
 const router = express.Router();
 
@@ -126,6 +128,12 @@ router.post('/register', (req, res) => {
       `INSERT INTO users (id, name, email, phone, password_hash, role, store_id)
        VALUES (?, ?, ?, ?, ?, 'store_admin', ?)`
     ).run(userId, owner_name, normalizedEmail, req.body.owner_phone || null, bcrypt.hashSync(owner_password, 10), storeId);
+
+    // Kahumbo is one brand with a standard menu across every location --
+    // every new store gets its own full copy of that menu immediately, not
+    // a blank slate. The owner can still edit/add/remove items from Admin
+    // > Manage Menu afterward if this particular location differs.
+    createStandardMenu(storeId);
   });
   tx();
 
@@ -137,7 +145,7 @@ router.post('/register', (req, res) => {
     token,
     user: { id: user.id, name: user.name, email: user.email, role: user.role, store_id: user.store_id },
     store: publicStore(store),
-    message: 'Store registered. An annual subscription must be active before customers can order.',
+    message: 'Store registered with the standard Kahumbo menu already loaded. An annual subscription must be active before customers can order.',
   });
 });
 
@@ -289,6 +297,8 @@ router.post('/subscription/submit-proof', requireAuth, requireStoreAdmin, (req, 
     }
   });
   tx();
+
+  sendSubscriptionSubmittedEmail(req.user.email, store.name).catch(() => {});
 
   res.status(201).json({
     request: db.prepare('SELECT * FROM subscription_payment_requests WHERE id = ?').get(requestId),

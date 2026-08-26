@@ -28,6 +28,12 @@ export default function AccountScreen({ navigation }) {
             style={{ marginTop: spacing(3) }}
           />
         )}
+        <Button
+          title="Change password"
+          variant="outline"
+          onPress={() => navigation.navigate('ChangePassword')}
+          style={{ marginTop: spacing(3) }}
+        />
         <Button title="Log out" variant="danger" onPress={logout} style={{ marginTop: spacing(3) }} />
       </View>
     </View>

@@ -4,6 +4,7 @@
 const express = require('express');
 const db = require('../db/database');
 const { requireAuth, requirePlatformAdmin } = require('../middleware/auth');
+const { sendSubscriptionApprovedEmail, sendSubscriptionRejectedEmail } = require('../utils/email');
 
 const router = express.Router();
 
@@ -66,6 +67,8 @@ router.post('/subscription-requests/:id/approve', (req, res) => {
   });
   tx();
 
+  sendSubscriptionApprovedEmail(store.owner_email, store.name, newExpiry.toISOString()).catch(() => {});
+
   res.json({
     message: `${store.name}'s subscription is now active until ${newExpiry.toISOString().slice(0, 10)}. Next year's fee: \u20b9${nextYearFee}.`,
     store: db.prepare('SELECT id, name, subscription_status, subscription_expires_at, annual_fee FROM stores WHERE id = ?').get(store.id),
@@ -78,17 +81,20 @@ router.post('/subscription-requests/:id/reject', (req, res) => {
   if (!request) return res.status(404).json({ error: 'Request not found' });
   if (request.status !== 'pending') return res.status(400).json({ error: `This request was already ${request.status}` });
 
+  let store = null;
   const tx = db.transaction(() => {
     db.prepare(
       `UPDATE subscription_payment_requests SET status = 'rejected', reviewed_at = datetime('now'), reviewed_by = ? WHERE id = ?`
     ).run(req.user.id, request.id);
 
-    const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(request.store_id);
+    store = db.prepare('SELECT * FROM stores WHERE id = ?').get(request.store_id);
     if (store && store.subscription_status === 'pending_review') {
       db.prepare("UPDATE stores SET subscription_status = 'inactive' WHERE id = ?").run(store.id);
     }
   });
   tx();
+
+  if (store) sendSubscriptionRejectedEmail(store.owner_email, store.name).catch(() => {});
 
   res.json({ message: 'Request rejected. The store owner can resubmit with a new screenshot.' });
 });
@@ -118,6 +124,62 @@ router.post('/qr-code', (req, res) => {
   if (upi_id) upsert.run('upi_id', upi_id);
 
   res.json({ message: 'Platform QR code updated.' });
+});
+
+// GET /api/platform/reports
+// Platform-wide totals (stores, orders, revenue) plus a per-store list so
+// the /admin page and mobile Platform Admin screen can offer a "view one
+// store's numbers" dropdown without a separate round trip per store.
+// Revenue excludes cancelled orders -- a cancelled order was never really
+// collected. Orders count includes every order regardless of status, since
+// "how many orders has this store received" is a different, still-useful
+// question from "how much did it actually make".
+router.get('/reports', (req, res) => {
+  const totals = db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM stores) as total_stores,
+         (SELECT COUNT(*) FROM orders) as total_orders,
+         (SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelled') as total_revenue`
+    )
+    .get();
+
+  const stores = db
+    .prepare(
+      `SELECT
+         s.id, s.name, s.subscription_status, s.annual_fee,
+         (SELECT COUNT(*) FROM orders o WHERE o.store_id = s.id) as order_count,
+         (SELECT COALESCE(SUM(total), 0) FROM orders o WHERE o.store_id = s.id AND o.status != 'cancelled') as revenue
+       FROM stores s
+       ORDER BY s.name ASC`
+    )
+    .all();
+
+  res.json({ totals, stores });
+});
+
+// GET /api/platform/reports/:storeId
+// Same shape as one row of the list above, but for a single store, plus a
+// small recent-orders list -- used when the platform admin picks a
+// specific store from the dropdown.
+router.get('/reports/:storeId', (req, res) => {
+  const store = db.prepare('SELECT id, name, subscription_status, annual_fee FROM stores WHERE id = ?').get(req.params.storeId);
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  const totals = db
+    .prepare(
+      `SELECT
+         COUNT(*) as order_count,
+         COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) as revenue
+       FROM orders WHERE store_id = ?`
+    )
+    .get(store.id);
+
+  const recentOrders = db
+    .prepare('SELECT id, status, total, payment_method, created_at FROM orders WHERE store_id = ? ORDER BY created_at DESC LIMIT 10')
+    .all(store.id);
+
+  res.json({ store, ...totals, recent_orders: recentOrders });
 });
 
 module.exports = router;

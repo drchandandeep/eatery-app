@@ -5,7 +5,7 @@ const db = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
 const { effectiveStoreStatus } = require('../utils/subscription');
 const { getStoreOrderingStatus } = require('../utils/storeStatus');
-const { sendOrderConfirmationEmail } = require('../utils/email');
+const { sendOrderConfirmationEmail, sendNewOrderNotification } = require('../utils/email');
 const { DELIVERY_FEE } = require('../utils/config');
 
 const router = express.Router();
@@ -174,6 +174,11 @@ router.post('/', requireAuth, (req, res) => {
   // Fire-and-forget: never let a slow/broken mail server delay the response
   // the customer is waiting on for their order confirmation.
   sendOrderConfirmationEmail(req.user.email, order, store.name).catch(() => {});
+
+  // Also let the store owner know a new order came in, so they see it even
+  // before opening the app.
+  const storeOwner = db.prepare("SELECT email FROM users WHERE store_id = ? AND role = 'store_admin'").get(storeId);
+  if (storeOwner) sendNewOrderNotification(storeOwner.email, order, store.name).catch(() => {});
 
   res.status(201).json({ order });
 });

@@ -35,6 +35,14 @@ export const api = {
   me: (token) => request('/auth/me', { token }),
   updateMyCredentials: (payload) => request('/auth/me', { method: 'PATCH', body: payload }),
 
+  // forgot password (not logged in)
+  requestPasswordReset: (identifier) => request('/auth/forgot-password/request', { method: 'POST', body: { identifier } }),
+  resetPassword: (payload) => request('/auth/forgot-password/reset', { method: 'POST', body: payload }),
+
+  // change password while logged in (any role, requires an emailed OTP)
+  requestPasswordChangeOtp: () => request('/auth/password/request-otp', { method: 'POST' }),
+  changePassword: (payload) => request('/auth/password/change', { method: 'POST', body: payload }),
+
   // stores
   nearbyStores: (lat, lng, radiusKm = 7) =>
     request(`/stores/nearby?lat=${lat}&lng=${lng}&radius_km=${radiusKm}`),
@@ -79,4 +87,6 @@ export const api = {
   platformRejectRequest: (id, reason) => request(`/platform/subscription-requests/${id}/reject`, { method: 'POST', body: { reason } }),
   platformGetQrCode: () => request('/platform/qr-code'),
   platformSetQrCode: (payload) => request('/platform/qr-code', { method: 'POST', body: payload }),
+  platformReports: () => request('/platform/reports'),
+  platformStoreReport: (storeId) => request(`/platform/reports/${storeId}`),
 };

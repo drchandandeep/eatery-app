@@ -5,7 +5,7 @@
 // Approving a request here is the one and only thing that activates a
 // store's subscription (see routes/platform.js).
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, Image, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { View, Text, Image, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TextInput, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, type, radius } from '../theme';
 import { api } from '../api/client';
@@ -13,7 +13,7 @@ import Button from '../components/Button';
 import { showAlert } from '../utils/alert';
 import { useAuth } from '../context/AuthContext';
 
-export default function PlatformAdminScreen() {
+export default function PlatformAdminScreen({ navigation }) {
   const { logout } = useAuth();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +25,12 @@ export default function PlatformAdminScreen() {
   const [newQrImage, setNewQrImage] = useState(null); // { uri, base64, mime } picked but not yet saved
   const [upiIdInput, setUpiIdInput] = useState('');
   const [savingQr, setSavingQr] = useState(false);
+
+  const [reports, setReports] = useState(null); // { totals, stores } | null
+  const [loadingReports, setLoadingReports] = useState(true);
+  const [selectedStoreId, setSelectedStoreId] = useState(null); // null = show totals across all stores
+  const [storeReport, setStoreReport] = useState(null);
+  const [loadingStoreReport, setLoadingStoreReport] = useState(false);
 
   const load = useCallback(() => {
     api
@@ -42,9 +48,27 @@ export default function PlatformAdminScreen() {
       })
       .catch(() => {})
       .finally(() => setLoadingQr(false));
+    api
+      .platformReports()
+      .then(setReports)
+      .catch(() => {})
+      .finally(() => setLoadingReports(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!selectedStoreId) {
+      setStoreReport(null);
+      return;
+    }
+    setLoadingStoreReport(true);
+    api
+      .platformStoreReport(selectedStoreId)
+      .then(setStoreReport)
+      .catch(() => {})
+      .finally(() => setLoadingStoreReport(false));
+  }, [selectedStoreId]);
 
   async function approve(id) {
     setActingId(id);
@@ -112,6 +136,65 @@ export default function PlatformAdminScreen() {
 
   const hasQr = !!qr?.image_base64;
 
+  const reportsSection = (
+    <View style={styles.qrCard}>
+      <Text style={type.h2}>Reports</Text>
+      <Text style={[type.bodyMuted, { marginTop: spacing(1), marginBottom: spacing(3) }]}>
+        Totals across every store, or pick one below for its own numbers.
+      </Text>
+
+      {loadingReports ? (
+        <ActivityIndicator color={colors.accent} />
+      ) : reports ? (
+        <>
+          <View style={styles.statsRow}>
+            <StatBox label="Stores" value={reports.totals.total_stores} />
+            <StatBox label="Orders" value={reports.totals.total_orders} />
+            <StatBox label="Revenue" value={`\u20b9${Math.round(reports.totals.total_revenue).toLocaleString('en-IN')}`} />
+          </View>
+
+          <Text style={[styles.label, { marginTop: spacing(4) }]}>View a specific store</Text>
+          <View style={styles.chipsWrap}>
+            <Pressable
+              onPress={() => setSelectedStoreId(null)}
+              style={[styles.chip, !selectedStoreId && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, !selectedStoreId && styles.chipTextActive]}>All stores</Text>
+            </Pressable>
+            {reports.stores.map((s) => (
+              <Pressable
+                key={s.id}
+                onPress={() => setSelectedStoreId(s.id)}
+                style={[styles.chip, selectedStoreId === s.id && styles.chipActive]}
+              >
+                <Text style={[styles.chipText, selectedStoreId === s.id && styles.chipTextActive]}>{s.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {selectedStoreId && (
+            loadingStoreReport ? (
+              <ActivityIndicator color={colors.accent} style={{ marginTop: spacing(3) }} />
+            ) : storeReport ? (
+              <View style={{ marginTop: spacing(3) }}>
+                <Text style={type.body}>{storeReport.store.name}</Text>
+                <Text style={type.bodyMuted}>
+                  Subscription: {storeReport.store.subscription_status} · ₹{Math.round(storeReport.store.annual_fee)}/year
+                </Text>
+                <View style={styles.statsRow}>
+                  <StatBox label="Orders" value={storeReport.order_count} />
+                  <StatBox label="Revenue" value={`\u20b9${Math.round(storeReport.revenue).toLocaleString('en-IN')}`} />
+                </View>
+              </View>
+            ) : null
+          )}
+        </>
+      ) : (
+        <Text style={type.bodyMuted}>Could not load reports.</Text>
+      )}
+    </View>
+  );
+
   const qrSection = (
     <View style={styles.qrCard}>
       <Text style={type.h2}>Your payment QR code</Text>
@@ -169,6 +252,10 @@ export default function PlatformAdminScreen() {
         <Button title="Log out" variant="outline" onPress={logout} />
       </View>
 
+      <View style={{ paddingHorizontal: spacing(5), marginBottom: spacing(2) }}>
+        <Button title="Change password" variant="outline" onPress={() => navigation.navigate('ChangePassword')} />
+      </View>
+
       <FlatList
         data={requests}
         keyExtractor={(r) => r.id}
@@ -176,6 +263,7 @@ export default function PlatformAdminScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.accent} />}
         ListHeaderComponent={
           <>
+            {reportsSection}
             {qrSection}
             <Text style={[type.h2, { marginBottom: spacing(2) }]}>Approvals</Text>
           </>
@@ -207,6 +295,15 @@ export default function PlatformAdminScreen() {
           </View>
         )}
       />
+    </View>
+  );
+}
+
+function StatBox({ label, value }) {
+  return (
+    <View style={styles.statBox}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -253,4 +350,28 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
   },
+  statsRow: { flexDirection: 'row', gap: spacing(3), marginTop: spacing(2) },
+  statBox: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing(3),
+    alignItems: 'center',
+  },
+  statValue: { fontWeight: '800', fontSize: 18, color: colors.accent },
+  statLabel: { ...type.caption, marginTop: spacing(1) },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },
+  chip: {
+    paddingHorizontal: spacing(3.5),
+    paddingVertical: spacing(2),
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  chipText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  chipTextActive: { color: colors.white },
 });

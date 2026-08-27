@@ -5,8 +5,37 @@
 
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, 'kahumbo.db');
+// DB_PATH is configurable via env var so it can point at a mounted
+// persistent disk in production (Render "Disks", Railway "Volumes", etc).
+// THIS MATTERS A LOT: most free/starter web-service tiers wipe the
+// container's local filesystem on every restart, redeploy, or (on Render's
+// free tier) every time the service spins back up after being idle. If
+// DB_PATH is left pointing inside the app's own code folder (the old
+// default) and no persistent disk is mounted there, every row written
+// since the last restart -- a newly approved store, a newly uploaded QR --
+// is silently gone the next time the service restarts. That data loss is
+// NOT a bug in the app logic; nothing in this codebase ever deletes rows
+// like that. It happens purely because the underlying disk itself was
+// thrown away by the host. See README.md "Persisting your data in
+// production" for how to fix this on Render/Railway.
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'kahumbo.db');
+
+// Fail loudly instead of silently creating a fresh empty DB if the folder
+// we're pointing at doesn't exist -- that's almost always a sign the
+// persistent disk isn't mounted where DB_PATH expects it to be.
+const dbDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dbDir)) {
+  throw new Error(
+    `[database.js] Directory "${dbDir}" (from DB_PATH) does not exist. ` +
+    `If you're running in production, this usually means your persistent ` +
+    `disk/volume isn't mounted at this path yet -- see README.md ` +
+    `"Persisting your data in production" before continuing, or you will ` +
+    `lose data on every restart.`
+  );
+}
+console.log(`[database.js] Using SQLite file at: ${DB_PATH}`);
 const db = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');
@@ -28,7 +57,7 @@ CREATE TABLE IF NOT EXISTS stores (
   zip TEXT,
   lat REAL NOT NULL,
   lng REAL NOT NULL,
-  service_radius_km REAL NOT NULL DEFAULT 7,   -- customers must be within this to sign up / order (range 5-10, see backend/utils/config.js)
+  service_radius_km REAL NOT NULL DEFAULT 7,   -- customers must be within this to sign up / order (range 0.1-7km, see backend/utils/config.js)
   annual_fee REAL NOT NULL DEFAULT 60000.00, -- increases 10% on every approved renewal, see routes/platform.js
   subscription_status TEXT NOT NULL DEFAULT 'inactive', -- 'inactive' | 'active' | 'expired' | 'pending_review'
   subscription_started_at TEXT,

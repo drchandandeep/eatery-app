@@ -139,25 +139,24 @@ export default function CheckoutScreen({ navigation }) {
 
         {payment === 'qr' && storeQr && (
           <View style={styles.qrCard}>
+            <Image source={{ uri: storeQr.image_base64 }} style={styles.qrImage} resizeMode="contain" />
+            {storeQr.upi_id && <Text style={[type.bodyMuted, { marginTop: spacing(2) }]}>UPI ID: {storeQr.upi_id}</Text>}
             {storeQr.upi_id ? (
               <>
                 <Button
-                  title={`Pay \u20b9${Math.round(total)} \u2014 Open UPI App`}
+                  title={`Pay \u20b9${Math.round(total)} Now \u2014 Open UPI App`}
                   onPress={handleOpenUpiApp}
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', marginTop: spacing(3) }}
                 />
-                <Text style={[type.caption, { marginTop: spacing(3), textAlign: 'center' }]}>
-                  This opens your UPI app (GPay, PhonePe, etc.) with the amount already filled in.
-                  Prefer to scan instead? Use the QR code below.
+                <Text style={[type.caption, { marginTop: spacing(2), textAlign: 'center' }]}>
+                  {`This opens your UPI app (GPay, PhonePe, etc.) with the store's UPI ID and the \u20b9${Math.round(total)} amount already filled in \u2014 just confirm and pay. Prefer to scan instead? Use the QR code above.`}
                 </Text>
               </>
             ) : null}
-            <Image source={{ uri: storeQr.image_base64 }} style={styles.qrImage} resizeMode="contain" />
-            {storeQr.upi_id && <Text style={[type.bodyMuted, { marginTop: spacing(2) }]}>UPI ID: {storeQr.upi_id}</Text>}
             <Text style={[type.caption, { marginTop: spacing(2), textAlign: 'center' }]}>
               {upiAttempted
                 ? 'Once you\u2019ve completed the payment, tap "Place order" below.'
-                : `Scan this in your UPI app, pay \u20b9${Math.round(total)}, then tap "Place order" below once you've paid.`}
+                : `Or scan the QR above in your UPI app, pay \u20b9${Math.round(total)}, then tap "Place order" below once you've paid.`}
             </Text>
           </View>
         )}

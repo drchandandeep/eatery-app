@@ -1,0 +1,30 @@
+# Render "Blueprint" for the Kahumbo backend, with a persistent disk
+# mounted so the SQLite database survives restarts/redeploys/idle-spindown.
+#
+# To use: push this repo to GitHub, then in the Render dashboard choose
+# "New +" -> "Blueprint" and point it at the repo. Render will read this
+# file and provision the service + disk automatically.
+#
+# If you'd rather click through the UI instead of using this file: create
+# a Web Service as normal, then go to its "Disks" tab and add a disk with
+# Mount Path "/data" -- then set the DB_PATH env var below to match.
+services:
+  - type: web
+    name: kahumbo-backend
+    runtime: node
+    plan: starter # "starter" (paid) keeps the service always-on; the free
+                  # plan spins down when idle -- fine functionally since the
+                  # disk below persists either way, just slower to wake up.
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    disk:
+      name: kahumbo-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DB_PATH
+        value: /data/kahumbo.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 4000

@@ -163,6 +163,53 @@ just store/collaborate on the code: push to GitHub as above, then deploy
 repo, auto-deploy on push"), and keep running `mobile/` locally on your own
 machine pointed at that deployed backend URL.
 
+## ⚠️ Persisting your data in production (read this before deploying)
+
+This app stores everything -- stores, approvals, uploaded QR codes, orders
+-- in a single SQLite file (`backend/db/kahumbo.db`). Locally that file
+just sits on your disk and nothing ever touches it but the app.
+
+**In production this is the #1 way to silently lose data.** Render's free
+web-service tier (and similar free/starter tiers elsewhere) gives you an
+*ephemeral* filesystem: every time the service restarts -- which includes
+spinning back up after being idle for ~15 minutes on the free plan, or any
+redeploy -- the container's local disk is thrown away and rebuilt from
+your last deployed code. If the SQLite file lives inside that regular
+filesystem, any store approved, QR uploaded, or order placed since the
+last restart disappears the moment the next restart happens. This is
+almost certainly why a store approved in the afternoon was gone by
+evening, and why an uploaded QR vanished after a logout/login (which
+likely coincided with, or triggered a check after, a spin-down/restart) --
+it's not something the app's code did; the underlying disk itself reset.
+
+**The fix: put the database file on a persistent disk/volume, not the
+regular app filesystem.**
+
+- **Render:** Add a **Disk** to your web service (Dashboard → your service
+  → Disks → Add Disk), mount it at e.g. `/data`, then set the env var
+  `DB_PATH=/data/kahumbo.db`. A ready-to-use `render.yaml` blueprint doing
+  exactly this is included at the repo root -- see below. Disks require a
+  paid plan (the free plan doesn't support attaching one at all).
+- **Railway:** Add a **Volume** to your service, mount it at e.g. `/data`,
+  then set `DB_PATH=/data/kahumbo.db` in the service's variables.
+- **Any host:** as long as `DB_PATH` points at storage that survives a
+  restart, you're safe. The app will now refuse to start (with a clear
+  error) if `DB_PATH`'s folder doesn't exist, specifically to stop this
+  from failing silently again.
+
+Using the included blueprint:
+```bash
+# after pushing to GitHub, in the Render dashboard:
+# New + -> Blueprint -> select this repo -> Render reads render.yaml
+# and provisions the web service + a 1GB persistent disk automatically.
+```
+
+If you've already deployed without a disk and lost data before making
+this change, unfortunately that specific data (the vanished store,
+QR, etc.) can't be recovered -- it was never written anywhere durable.
+Re-registering/re-uploading after switching to a persistent disk will
+stick from then on.
+
 ## What's included
 
 | Feature | Where |

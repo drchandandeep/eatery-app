@@ -253,7 +253,17 @@ const MIGRATION_STATEMENTS = [
 
 async function initSchema() {
   for (const stmt of SCHEMA_STATEMENTS) {
-    await client.execute(stmt);
+    try {
+      await client.execute(stmt);
+    } catch (err) {
+      // Table creation genuinely must succeed, so this still stops startup --
+      // but log the exact statement and the full underlying error first, so
+      // a failure here (e.g. a transient Turso error) is diagnosable from
+      // the Render logs instead of showing up as a bare "400".
+      console.error('Schema statement failed:\n' + stmt);
+      console.error(err?.cause || err);
+      throw err;
+    }
   }
   for (const stmt of MIGRATION_STATEMENTS) {
     try {

@@ -16,33 +16,33 @@ function generateCode() {
 // Creates a fresh OTP for a user + purpose, invalidating any earlier
 // unused codes for that same user+purpose so only the most recent one
 // entered by the user will actually work.
-function createOtp(userId, purpose) {
-  db.prepare("UPDATE password_otps SET used = 1 WHERE user_id = ? AND purpose = ? AND used = 0").run(userId, purpose);
+async function createOtp(userId, purpose) {
+  await db.run('UPDATE password_otps SET used = 1 WHERE user_id = ? AND purpose = ? AND used = 0', [userId, purpose]);
 
   const code = generateCode();
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
-  db.prepare(
-    'INSERT INTO password_otps (id, user_id, code, purpose, expires_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(nanoid(12), userId, code, purpose, expiresAt);
+  await db.run(
+    'INSERT INTO password_otps (id, user_id, code, purpose, expires_at) VALUES (?, ?, ?, ?, ?)',
+    [nanoid(12), userId, code, purpose, expiresAt]
+  );
   return code;
 }
 
 // Returns true and marks the code used if it's valid; false otherwise.
 // A code is valid only if: it matches, it's for the right user+purpose,
 // it hasn't expired, and it hasn't already been used.
-function verifyAndConsumeOtp(userId, purpose, code) {
-  const row = db
-    .prepare(
-      `SELECT * FROM password_otps
-       WHERE user_id = ? AND purpose = ? AND code = ? AND used = 0
-       ORDER BY created_at DESC LIMIT 1`
-    )
-    .get(userId, purpose, String(code || '').trim());
+async function verifyAndConsumeOtp(userId, purpose, code) {
+  const row = await db.get(
+    `SELECT * FROM password_otps
+     WHERE user_id = ? AND purpose = ? AND code = ? AND used = 0
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId, purpose, String(code || '').trim()]
+  );
 
   if (!row) return false;
   if (new Date(row.expires_at) < new Date()) return false;
 
-  db.prepare('UPDATE password_otps SET used = 1 WHERE id = ?').run(row.id);
+  await db.run('UPDATE password_otps SET used = 1 WHERE id = ?', [row.id]);
   return true;
 }
 

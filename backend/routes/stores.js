@@ -10,6 +10,7 @@ const { effectiveStoreStatus: effectiveStatus } = require('../utils/subscription
 const { MIN_SERVICE_RADIUS_KM, MAX_SERVICE_RADIUS_KM, DEFAULT_SERVICE_RADIUS_KM } = require('../utils/config');
 const { createStandardMenu } = require('../db/kahumboMenu');
 const { sendSubscriptionSubmittedEmail } = require('../utils/email');
+const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 
@@ -50,12 +51,7 @@ function publicStore(store) {
 }
 
 // POST /api/stores/register
-// Registers a brand-new store AND its owner account in one step. The owner
-// email and the store address supplied here are permanent -- there is no
-// endpoint anywhere in this API that can change them afterward.
-// body: { owner_name, owner_email, owner_password, store_name,
-//         address_line, city, zip, lat, lng, order_qr_image_base64?, order_upi_id? }
-router.post('/register', (req, res) => {
+router.post('/register', asyncHandler(async (req, res) => {
   const {
     owner_name,
     owner_email,
@@ -84,16 +80,13 @@ router.post('/register', (req, res) => {
 
   const normalizedEmail = owner_email.toLowerCase().trim();
 
-  // One email = one store, forever. This is the anti-abuse rule: it stops
-  // someone registering once and re-using the same account for a different
-  // store address down the line.
-  const existingStore = db.prepare('SELECT id FROM stores WHERE owner_email = ?').get(normalizedEmail);
+  const existingStore = await db.get('SELECT id FROM stores WHERE owner_email = ?', [normalizedEmail]);
   if (existingStore) {
     return res.status(409).json({
       error: 'This email is already registered to a store. Each store must register with its own unique email.',
     });
   }
-  const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail);
+  const existingUser = await db.get('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
   if (existingUser) {
     return res.status(409).json({ error: 'An account with this email already exists' });
   }
@@ -101,44 +94,39 @@ router.post('/register', (req, res) => {
   const storeId = nanoid(12);
   const userId = nanoid(12);
 
-  const tx = db.transaction(() => {
-    // The order-payment QR is optional at registration -- a store owner can
-    // always add or change it later from their Admin dashboard (PATCH
-    // /api/stores/me). Customers simply won't see a "Pay via Store QR"
-    // option at checkout until one exists (see routes/menu.js).
-    db.prepare(
+  await db.transaction(async (tx) => {
+    await tx.run(
       `INSERT INTO stores
         (id, name, owner_email, address_line, city, zip, lat, lng, service_radius_km, subscription_status, order_qr_image_base64, order_upi_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive', ?, ?)`
-    ).run(
-      storeId,
-      store_name,
-      normalizedEmail,
-      address_line,
-      city || null,
-      zip || null,
-      Number(lat),
-      Number(lng),
-      DEFAULT_SERVICE_RADIUS_KM,
-      order_qr_image_base64 || null,
-      order_upi_id || null
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive', ?, ?)`,
+      [
+        storeId,
+        store_name,
+        normalizedEmail,
+        address_line,
+        city || null,
+        zip || null,
+        Number(lat),
+        Number(lng),
+        DEFAULT_SERVICE_RADIUS_KM,
+        order_qr_image_base64 || null,
+        order_upi_id || null,
+      ]
     );
 
-    db.prepare(
+    await tx.run(
       `INSERT INTO users (id, name, email, phone, password_hash, role, store_id)
-       VALUES (?, ?, ?, ?, ?, 'store_admin', ?)`
-    ).run(userId, owner_name, normalizedEmail, req.body.owner_phone || null, bcrypt.hashSync(owner_password, 10), storeId);
+       VALUES (?, ?, ?, ?, ?, 'store_admin', ?)`,
+      [userId, owner_name, normalizedEmail, req.body.owner_phone || null, bcrypt.hashSync(owner_password, 10), storeId]
+    );
 
     // Kahumbo is one brand with a standard menu across every location --
-    // every new store gets its own full copy of that menu immediately, not
-    // a blank slate. The owner can still edit/add/remove items from Admin
-    // > Manage Menu afterward if this particular location differs.
-    createStandardMenu(storeId);
+    // every new store gets its own full copy of that menu immediately.
+    await createStandardMenu(storeId, tx);
   });
-  tx();
 
-  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  const store = await db.get('SELECT * FROM stores WHERE id = ?', [storeId]);
+  const user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
   const token = signToken(user);
 
   res.status(201).json({
@@ -147,12 +135,10 @@ router.post('/register', (req, res) => {
     store: publicStore(store),
     message: 'Store registered with the standard Kahumbo menu already loaded. An annual subscription must be active before customers can order.',
   });
-});
+}));
 
 // GET /api/stores/nearby?lat=&lng=&radius_km=10
-// Public lookup used by the customer signup screen: only stores with an
-// active subscription and within range are eligible for new signups.
-router.get('/nearby', (req, res) => {
+router.get('/nearby', asyncHandler(async (req, res) => {
   const lat = Number(req.query.lat);
   const lng = Number(req.query.lng);
   if (!isValidCoordinate(lat, lng)) {
@@ -160,7 +146,7 @@ router.get('/nearby', (req, res) => {
   }
   const radiusKm = Math.min(Number(req.query.radius_km) || MAX_SERVICE_RADIUS_KM, MAX_SERVICE_RADIUS_KM);
 
-  const stores = db.prepare('SELECT * FROM stores').all();
+  const stores = await db.all('SELECT * FROM stores', []);
   const nearby = stores
     .map((s) => ({ ...s, distance_km: haversineKm(lat, lng, s.lat, s.lng) }))
     .filter((s) => effectiveStatus(s) === 'active' && s.distance_km <= Math.min(radiusKm, s.service_radius_km))
@@ -168,20 +154,17 @@ router.get('/nearby', (req, res) => {
     .map((s) => ({ ...publicStore(s), distance_km: +s.distance_km.toFixed(2) }));
 
   res.json({ stores: nearby });
-});
+}));
 
 // GET /api/stores/me  (store_admin only)
-router.get('/me', requireAuth, requireStoreAdmin, (req, res) => {
-  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.user.store_id);
+router.get('/me', requireAuth, requireStoreAdmin, asyncHandler(async (req, res) => {
+  const store = await db.get('SELECT * FROM stores WHERE id = ?', [req.user.store_id]);
   if (!store) return res.status(404).json({ error: 'Store not found' });
   res.json({ store: publicStore(store) });
-});
+}));
 
 // PATCH /api/stores/me  (store_admin only)
-// Only non-identity fields can ever be changed here. Attempting to change
-// the owner email or address is explicitly rejected, not just ignored, so
-// the restriction is visible rather than silently swallowed.
-router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
+router.patch('/me', requireAuth, requireStoreAdmin, asyncHandler(async (req, res) => {
   const attemptedLockedFields = LOCKED_STORE_FIELDS.filter((f) => f in req.body);
   if (attemptedLockedFields.length > 0) {
     return res.status(403).json({
@@ -189,7 +172,7 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
     });
   }
 
-  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.user.store_id);
+  const store = await db.get('SELECT * FROM stores WHERE id = ?', [req.user.store_id]);
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
   const updates = {};
@@ -203,9 +186,6 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
     }
     updates.service_radius_km = r;
   }
-  // Daily operating hours -- editable any time (unlike the identity fields
-  // above), since these are operational, not something that needs
-  // permanent locking. Basic 'HH:MM' shape validation only.
   const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
   if (req.body.opens_at != null) {
     if (!HHMM.test(req.body.opens_at)) return res.status(400).json({ error: 'opens_at must be in HH:MM 24h format' });
@@ -218,17 +198,9 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
   if ((updates.opens_at || store.opens_at) >= (updates.closes_at || store.closes_at)) {
     return res.status(400).json({ error: 'opens_at must be earlier than closes_at' });
   }
-  // Manual on/off switch -- independent of the hours above (e.g. pausing
-  // mid-day during a rush, while staying within scheduled hours).
   if (req.body.accepting_orders != null) {
     updates.accepting_orders = req.body.accepting_orders ? 1 : 0;
   }
-  // The store's own order-payment QR code -- shown to customers at
-  // checkout. Uploading a new one replaces the old one; there's no history
-  // kept (unlike the platform's subscription QR review flow) since this is
-  // the store's own money, not something the platform needs to verify.
-  // Uses "in req.body" rather than "!= null" so an explicit null (clear the
-  // QR) is honored, not silently treated as "field not provided".
   if ('order_qr_image_base64' in req.body) {
     updates.order_qr_image_base64 = req.body.order_qr_image_base64 || null;
   }
@@ -241,79 +213,64 @@ router.patch('/me', requireAuth, requireStoreAdmin, (req, res) => {
   }
 
   const setClause = Object.keys(updates).map((f) => `${f} = ?`).join(', ');
-  db.prepare(`UPDATE stores SET ${setClause} WHERE id = ?`).run(...Object.values(updates), store.id);
+  await db.run(`UPDATE stores SET ${setClause} WHERE id = ?`, [...Object.values(updates), store.id]);
 
-  res.json({ store: publicStore(db.prepare('SELECT * FROM stores WHERE id = ?').get(store.id)) });
-});
+  res.json({ store: publicStore(await db.get('SELECT * FROM stores WHERE id = ?', [store.id])) });
+}));
 
 // ---- Annual subscription payment (own-QR + manual approval) ----
-//
-// There is no automated payment gateway for the subscription -- the store
-// owner pays via the platform's UPI QR code (see GET /subscription-qr) and
-// uploads a screenshot as evidence. A platform_admin then reviews it and
-// approves/rejects (see routes/platform.js). This keeps things honest: an
-// uploaded image can't be automatically verified as a real, successful
-// payment of the right amount, so a human always makes the final call.
 
 // GET /api/stores/subscription-qr  (any authenticated store_admin)
-// Returns the platform's own UPI QR code image + UPI id, so the store owner
-// knows where to pay their annual fee.
-router.get('/subscription-qr', requireAuth, requireStoreAdmin, (req, res) => {
-  const qr = db.prepare("SELECT value FROM platform_settings WHERE key = 'qr_image_base64'").get();
-  const upiId = db.prepare("SELECT value FROM platform_settings WHERE key = 'upi_id'").get();
-  const store = db.prepare('SELECT annual_fee FROM stores WHERE id = ?').get(req.user.store_id);
+router.get('/subscription-qr', requireAuth, requireStoreAdmin, asyncHandler(async (req, res) => {
+  const qr = await db.get("SELECT value FROM platform_settings WHERE key = 'qr_image_base64'", []);
+  const upiId = await db.get("SELECT value FROM platform_settings WHERE key = 'upi_id'", []);
+  const store = await db.get('SELECT annual_fee FROM stores WHERE id = ?', [req.user.store_id]);
   res.json({
     qr_image_base64: qr?.value || null,
     upi_id: upiId?.value || null,
     amount: store?.annual_fee || null,
   });
-});
+}));
 
 // POST /api/stores/subscription/submit-proof  (store_admin only)
-// body: { screenshot_base64, note? }
-// Creates a pending review request. The store's subscription_status is set
-// to 'pending_review' so the dashboard can show "awaiting approval" instead
-// of a plain "inactive" -- it does NOT activate anything by itself.
-router.post('/subscription/submit-proof', requireAuth, requireStoreAdmin, (req, res) => {
+router.post('/subscription/submit-proof', requireAuth, requireStoreAdmin, asyncHandler(async (req, res) => {
   const { screenshot_base64, note } = req.body;
   if (!screenshot_base64) {
     return res.status(400).json({ error: 'screenshot_base64 is required -- upload a screenshot of your payment' });
   }
 
-  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.user.store_id);
+  const store = await db.get('SELECT * FROM stores WHERE id = ?', [req.user.store_id]);
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
   const requestId = nanoid(12);
-  const tx = db.transaction(() => {
-    db.prepare(
+  await db.transaction(async (tx) => {
+    await tx.run(
       `INSERT INTO subscription_payment_requests (id, store_id, screenshot_base64, note, amount, status)
-       VALUES (?, ?, ?, ?, ?, 'pending')`
-    ).run(requestId, store.id, screenshot_base64, note || null, store.annual_fee);
+       VALUES (?, ?, ?, ?, ?, 'pending')`,
+      [requestId, store.id, screenshot_base64, note || null, store.annual_fee]
+    );
 
-    // Only move a fresh/expired store into "pending_review" -- don't
-    // downgrade a store that's already active (e.g. renewing early).
     if (store.subscription_status !== 'active') {
-      db.prepare("UPDATE stores SET subscription_status = 'pending_review' WHERE id = ?").run(store.id);
+      await tx.run("UPDATE stores SET subscription_status = 'pending_review' WHERE id = ?", [store.id]);
     }
   });
-  tx();
 
   sendSubscriptionSubmittedEmail(req.user.email, store.name).catch(() => {});
 
   res.status(201).json({
-    request: db.prepare('SELECT * FROM subscription_payment_requests WHERE id = ?').get(requestId),
-    store: publicStore(db.prepare('SELECT * FROM stores WHERE id = ?').get(store.id)),
+    request: await db.get('SELECT * FROM subscription_payment_requests WHERE id = ?', [requestId]),
+    store: publicStore(await db.get('SELECT * FROM stores WHERE id = ?', [store.id])),
     message: 'Payment proof submitted. Your subscription will activate once it\u2019s reviewed and approved.',
   });
-});
+}));
 
 // GET /api/stores/subscription/requests  (store_admin only)
-// Lets the store owner see the status of their own submitted proofs.
-router.get('/subscription/requests', requireAuth, requireStoreAdmin, (req, res) => {
-  const requests = db
-    .prepare('SELECT id, note, amount, status, created_at, reviewed_at FROM subscription_payment_requests WHERE store_id = ? ORDER BY created_at DESC')
-    .all(req.user.store_id);
+router.get('/subscription/requests', requireAuth, requireStoreAdmin, asyncHandler(async (req, res) => {
+  const requests = await db.all(
+    'SELECT id, note, amount, status, created_at, reviewed_at FROM subscription_payment_requests WHERE store_id = ? ORDER BY created_at DESC',
+    [req.user.store_id]
+  );
   res.json({ requests });
-});
+}));
 
 module.exports = router;

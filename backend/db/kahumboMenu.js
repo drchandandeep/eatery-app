@@ -3,22 +3,14 @@
 // the same products, so every store gets an identical copy of this menu
 // (its own categories/items/prices, fully independent rows, just created
 // from the same template). This runs both when seeding the demo store and
-// automatically right after a real store registers (see
-// routes/stores.js) -- a new store should never start with an empty menu,
-// since there's nothing store-specific for an owner to configure here.
-// If a store owner ever needs their own custom menu instead, they can
-// still edit/delete/add items normally from Admin > Manage Menu -- this
-// just gives them a correct starting point instead of a blank one.
+// automatically right after a real store registers (see routes/stores.js)
+// -- a new store should never start with an empty menu.
 const { nanoid } = require('nanoid');
 const db = require('./database');
 const itemImages = require('./itemImages');
 
 const id = () => nanoid(12);
 
-// Item name -> photo, for the handful of items with a real product photo
-// supplied. Everything else gets no image_url (the mobile app falls back
-// to a letter-initial placeholder for those, see
-// mobile/src/components/MenuItemCard.js).
 const ITEM_IMAGE_BY_NAME = {
   'Jamun Shot': itemImages.jamun_shot,
   'Pop Shots Combo (Any 6 Flavours, on stick)': itemImages.pop_shots,
@@ -45,51 +37,20 @@ const CATEGORY_NAMES = [
   'Combos',
 ];
 
-// Creates a fresh copy of the standard Kahumbo menu (categories + items,
-// with option groups for sized items and photos where available) for the
-// given storeId. Safe to call on any store -- it only ever inserts new
-// rows scoped to that store_id, never touches another store's menu.
-function createStandardMenu(storeId) {
-  const categories = {};
-  const insertCategory = db.prepare(
-    'INSERT INTO categories (id, store_id, name, sort_order) VALUES (?, ?, ?, ?)'
-  );
-  CATEGORY_NAMES.forEach((name, i) => {
-    const catId = id();
-    categories[name] = catId;
-    insertCategory.run(catId, storeId, name, i + 1);
-  });
+// Builds the full menu as a plain JS data structure first (no database
+// calls here at all) -- this is exactly the same item/price/size data as
+// before, just assembled in memory rather than written to the database one
+// call at a time. All the actual database writes happen afterward, in
+// buildMenuWriteOperations()/createStandardMenu() below, in a single batch.
+function buildMenuPlan() {
+  const categories = CATEGORY_NAMES.map((name, i) => ({ name, sortOrder: i + 1 }));
+  const items = []; // { categoryName, name, price, description, sizes? }
 
-  const insertItem = db.prepare(`
-    INSERT INTO menu_items (id, store_id, category_id, name, description, base_price, image_url, is_available, is_veg)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
-  `);
-  const insertGroup = db.prepare(`
-    INSERT INTO option_groups (id, menu_item_id, name, min_select, max_select, required)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  const insertChoice = db.prepare(`
-    INSERT INTO option_choices (id, group_id, name, price_delta) VALUES (?, ?, ?, ?)
-  `);
-
-  // Everything on this menu is vegetarian.
   function addItem(categoryName, name, price, description = '') {
-    insertItem.run(id(), storeId, categories[categoryName], name, description, price, ITEM_IMAGE_BY_NAME[name] || null, 1);
+    items.push({ categoryName, name, price, description });
   }
-
-  // For items sold in two sizes (e.g. Fruit Shots' 70ml-4pcs vs Big Shot, or
-  // Fruity Frosts' 100gm vs 200gm) -- base_price is the first size, and a
-  // "Size" option group covers the rest via price_delta, same pattern as a
-  // pizza's size options.
   function addSizedItem(categoryName, name, sizes, description = '') {
-    const basePrice = sizes[0][1];
-    const itemId = id();
-    insertItem.run(itemId, storeId, categories[categoryName], name, description, basePrice, ITEM_IMAGE_BY_NAME[name] || null, 1);
-    if (sizes.length > 1) {
-      const groupId = id();
-      insertGroup.run(groupId, itemId, 'Size', 1, 1, 1);
-      sizes.forEach(([label, price]) => insertChoice.run(id(), groupId, label, price - basePrice));
-    }
+    items.push({ categoryName, name, price: sizes[0][1], description, sizes });
   }
 
   // ---- Fruit Shots (70ml *4pcs / Big Shot 100ml where available) ----
@@ -226,6 +187,57 @@ function createStandardMenu(storeId) {
     140,
     'Choose any 6: Jamun, Falsa, Guava, Strawberry, Chikoo, Mango, Chocolate, Paan, Pista, Rose Gulakand, Coconut, Mava Malai'
   );
+
+  return { categories, items };
+}
+
+// Writes the full plan for one store using the given async db handle
+// (either the top-level db module, or a transaction handle passed in from
+// a caller that wants this bundled into its own larger transaction, e.g.
+// routes/stores.js during registration).
+async function writeMenuPlan(handle, storeId) {
+  const { categories, items } = buildMenuPlan();
+
+  const categoryIds = {};
+  for (const cat of categories) {
+    const catId = id();
+    categoryIds[cat.name] = catId;
+    await handle.run('INSERT INTO categories (id, store_id, name, sort_order) VALUES (?, ?, ?, ?)', [catId, storeId, cat.name, cat.sortOrder]);
+  }
+
+  for (const item of items) {
+    const itemId = id();
+    await handle.run(
+      `INSERT INTO menu_items (id, store_id, category_id, name, description, base_price, image_url, is_available, is_veg)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`,
+      [itemId, storeId, categoryIds[item.categoryName], item.name, item.description, item.price, ITEM_IMAGE_BY_NAME[item.name] || null]
+    );
+
+    if (item.sizes && item.sizes.length > 1) {
+      const groupId = id();
+      await handle.run(
+        'INSERT INTO option_groups (id, menu_item_id, name, min_select, max_select, required) VALUES (?, ?, ?, ?, ?, ?)',
+        [groupId, itemId, 'Size', 1, 1, 1]
+      );
+      for (const [label, price] of item.sizes) {
+        await handle.run('INSERT INTO option_choices (id, group_id, name, price_delta) VALUES (?, ?, ?, ?)', [id(), groupId, label, price - item.price]);
+      }
+    }
+  }
+}
+
+// Creates a fresh copy of the standard Kahumbo menu for the given storeId.
+// If a transaction handle (tx) is passed in -- e.g. from routes/stores.js,
+// which wraps store + user + menu creation in one atomic registration --
+// this reuses that transaction instead of opening its own. Otherwise (e.g.
+// db/seed.js calling this standalone) it opens and commits its own
+// transaction.
+async function createStandardMenu(storeId, tx) {
+  if (tx) {
+    await writeMenuPlan(tx, storeId);
+  } else {
+    await db.transaction((innerTx) => writeMenuPlan(innerTx, storeId));
+  }
 }
 
 module.exports = { createStandardMenu };

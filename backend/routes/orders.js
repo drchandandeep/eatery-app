@@ -6,18 +6,14 @@ const { requireAuth } = require('../middleware/auth');
 const { effectiveStoreStatus } = require('../utils/subscription');
 const { getStoreOrderingStatus } = require('../utils/storeStatus');
 const { sendOrderConfirmationEmail, sendNewOrderNotification } = require('../utils/email');
-const { DELIVERY_FEE } = require('../utils/config');
+const { haversineKm, isValidCoordinate } = require('../utils/geo');
+const { DELIVERY_FEE, MAX_SERVICE_RADIUS_KM } = require('../utils/config');
+const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 
-// India GST for restaurants is commonly 5% (non-AC / composition scheme).
-// DELIVERY_FEE lives in utils/config.js as the single source of truth so
-// the backend total and the mobile checkout estimate can never disagree.
 const TAX_RATE = 0.05;
 
-// Human-readable version of a getStoreOrderingStatus() reason -- shared so
-// the "why can't I order" message is worded identically everywhere it's
-// shown (checkout error, menu screen banner).
 function closedReasonMessage(reason) {
   switch (reason) {
     case 'subscription_inactive':
@@ -32,9 +28,8 @@ function closedReasonMessage(reason) {
 }
 
 // Recomputes a cart's real price server-side from the store's own menu data
-// -- never trusts any price the client sends. Throws a plain Error with a
-// user-facing message on any invalid item; callers decide the HTTP status.
-function computeOrderTotals(items, storeId) {
+// -- never trusts any price the client sends.
+async function computeOrderTotals(items, storeId) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Order must include at least one item');
   }
@@ -43,9 +38,7 @@ function computeOrderTotals(items, storeId) {
   const resolvedItems = [];
 
   for (const line of items) {
-    const menuItem = db
-      .prepare('SELECT * FROM menu_items WHERE id = ? AND store_id = ?')
-      .get(line.menu_item_id, storeId);
+    const menuItem = await db.get('SELECT * FROM menu_items WHERE id = ? AND store_id = ?', [line.menu_item_id, storeId]);
     if (!menuItem) throw new Error(`Item ${line.menu_item_id} is not available from your store`);
 
     const optionsDelta = (line.selected_options || []).reduce(
@@ -72,79 +65,89 @@ function computeOrderTotals(items, storeId) {
 }
 
 // Writes the order + its line items + its first status-history row in one
-// transaction. This is the only place an order gets written to the
-// database (both cash and QR payment methods funnel through here).
-function insertOrderRecord({ storeId, userId, totals, addressLine, paymentMethod, paymentStatus, paymentGateway, paymentRef }) {
+// transaction. This is the only place an order gets written to the database.
+async function insertOrderRecord({ storeId, userId, totals, addressLine, addressLat, addressLng, paymentMethod, paymentStatus, paymentGateway, paymentRef }) {
   const orderId = nanoid(12);
 
-  const insertOrder = db.prepare(`
-    INSERT INTO orders
-      (id, store_id, user_id, status, subtotal, delivery_fee, tax, total, address_line, payment_method, payment_status, payment_gateway, payment_ref)
-    VALUES (?, ?, ?, 'placed', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const insertItem = db.prepare(`
-    INSERT INTO order_items (id, order_id, menu_item_id, name, quantity, unit_price, selected_options)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const insertHistory = db.prepare(`
-    INSERT INTO order_status_history (id, order_id, status) VALUES (?, ?, 'placed')
-  `);
-
-  const tx = db.transaction(() => {
-    insertOrder.run(
-      orderId,
-      storeId,
-      userId,
-      totals.subtotal,
-      totals.deliveryFee,
-      totals.tax,
-      totals.total,
-      addressLine || null,
-      paymentMethod,
-      paymentStatus,
-      paymentGateway || null,
-      paymentRef || null
+  await db.transaction(async (tx) => {
+    await tx.run(
+      `INSERT INTO orders
+        (id, store_id, user_id, status, subtotal, delivery_fee, tax, total, address_line, address_lat, address_lng, payment_method, payment_status, payment_gateway, payment_ref)
+       VALUES (?, ?, ?, 'placed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        orderId,
+        storeId,
+        userId,
+        totals.subtotal,
+        totals.deliveryFee,
+        totals.tax,
+        totals.total,
+        addressLine || null,
+        addressLat != null ? Number(addressLat) : null,
+        addressLng != null ? Number(addressLng) : null,
+        paymentMethod,
+        paymentStatus,
+        paymentGateway || null,
+        paymentRef || null,
+      ]
     );
-    totals.resolvedItems.forEach((it) =>
-      insertItem.run(nanoid(12), orderId, it.menu_item_id, it.name, it.quantity, it.unit_price, it.selected_options)
-    );
-    insertHistory.run(nanoid(12), orderId);
+    for (const it of totals.resolvedItems) {
+      await tx.run(
+        'INSERT INTO order_items (id, order_id, menu_item_id, name, quantity, unit_price, selected_options) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [nanoid(12), orderId, it.menu_item_id, it.name, it.quantity, it.unit_price, it.selected_options]
+      );
+    }
+    await tx.run("INSERT INTO order_status_history (id, order_id, status) VALUES (?, ?, 'placed')", [nanoid(12), orderId]);
   });
-  tx();
 
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  const orderItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
+  const order = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]);
+  const orderItems = await db.all('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
   return { ...order, items: orderItems };
 }
 
-// POST /api/orders  -> place an order. No payment gateway is involved --
-// payment is either collected at delivery (cash or UPI, in person) or paid
-// upfront by the customer scanning the store's own QR code and confirming
-// they've paid. Either way this endpoint just records the order; there's
-// no automatic payment verification for either path (see
-// mobile/src/screens/CheckoutScreen.js for why: a QR-based payment can't be
-// verified server-side without a real payment gateway, so the store owner
-// confirms receipt themselves when advancing the order's status).
-// body: { items: [...], address_line, payment_method: 'cash' | 'qr' }
-router.post('/', requireAuth, (req, res) => {
-  const { items, address_line } = req.body;
+// POST /api/orders  -> place an order.
+router.post('/', requireAuth, asyncHandler(async (req, res) => {
+  const { items, address_line, address_lat, address_lng } = req.body;
   const paymentMethod = req.body.payment_method === 'qr' ? 'qr' : 'cash';
   if (req.user.role !== 'customer' || !req.user.store_id) {
     return res.status(403).json({ error: 'Only customer accounts linked to a store can place orders' });
   }
 
+  if (!address_line || !String(address_line).trim()) {
+    return res.status(400).json({ error: 'A delivery address is required' });
+  }
+
   const storeId = req.user.store_id;
 
-  // Full stop: subscription lapsed, store paused itself, or outside its
-  // operating hours -- any one of these blocks new orders. All three
-  // checks live in one place (utils/storeStatus.js) so GET /api/menu can
-  // show the same "why is this closed" reason to the customer up front.
-  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
+  const store = await db.get('SELECT * FROM stores WHERE id = ?', [storeId]);
   const orderingStatus = store ? getStoreOrderingStatus(store) : { open: false, reason: 'subscription_inactive' };
   if (!store || !orderingStatus.open) {
     return res.status(402).json({
       error: closedReasonMessage(orderingStatus.reason),
       reason: orderingStatus.reason,
+    });
+  }
+
+  // The DELIVERY address must itself be within the store's service radius --
+  // not just the address the customer registered with. Previously only the
+  // one-time registration address was ever checked; a customer validly
+  // registered at 2km could type any checkout address, even 50km away, and
+  // the order would still go through. This applies the same 0-7km rule,
+  // live, to every order's actual delivery location.
+  if (!isValidCoordinate(Number(address_lat), Number(address_lng))) {
+    return res.status(400).json({
+      error: 'A delivery location is required to verify this address is within the store\u2019s delivery area. Please share your location for this delivery address.',
+      reason: 'address_location_required',
+    });
+  }
+  const distanceKm = haversineKm(Number(address_lat), Number(address_lng), store.lat, store.lng);
+  const allowedRadius = Math.min(store.service_radius_km, MAX_SERVICE_RADIUS_KM);
+  if (distanceKm > allowedRadius) {
+    return res.status(403).json({
+      error: `This delivery address is ${distanceKm.toFixed(1)}km from ${store.name}, which is outside its ${allowedRadius}km delivery area. Please choose a delivery address within range.`,
+      reason: 'address_outside_radius',
+      distance_km: +distanceKm.toFixed(2),
+      allowed_radius_km: allowedRadius,
     });
   }
 
@@ -154,46 +157,39 @@ router.post('/', requireAuth, (req, res) => {
 
   let totals;
   try {
-    totals = computeOrderTotals(items, storeId);
+    totals = await computeOrderTotals(items, storeId);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
 
-  const order = insertOrderRecord({
+  const order = await insertOrderRecord({
     storeId,
     userId: req.user.id,
     totals,
     addressLine: address_line,
+    addressLat: address_lat,
+    addressLng: address_lng,
     paymentMethod,
-    // Both paths are "pending" from the platform's point of view -- cash is
-    // collected at delivery, and a QR payment can't be auto-verified. The
-    // store owner is the one who actually knows when money has landed.
     paymentStatus: 'pending',
   });
 
-  // Fire-and-forget: never let a slow/broken mail server delay the response
-  // the customer is waiting on for their order confirmation.
   sendOrderConfirmationEmail(req.user.email, order, store.name).catch(() => {});
 
-  // Also let the store owner know a new order came in, so they see it even
-  // before opening the app.
-  const storeOwner = db.prepare("SELECT email FROM users WHERE store_id = ? AND role = 'store_admin'").get(storeId);
+  const storeOwner = await db.get("SELECT email FROM users WHERE store_id = ? AND role = 'store_admin'", [storeId]);
   if (storeOwner) sendNewOrderNotification(storeOwner.email, order, store.name).catch(() => {});
 
   res.status(201).json({ order });
-});
+}));
 
 // GET /api/orders  -> current user's order history
-router.get('/', requireAuth, (req, res) => {
-  const orders = db
-    .prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC')
-    .all(req.user.id);
+router.get('/', requireAuth, asyncHandler(async (req, res) => {
+  const orders = await db.all('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
   res.json({ orders });
-});
+}));
 
-// GET /api/orders/:id -> single order with items + status history (for live tracking)
-router.get('/:id', requireAuth, (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+// GET /api/orders/:id -> single order with items + status history
+router.get('/:id', requireAuth, asyncHandler(async (req, res) => {
+  const order = await db.get('SELECT * FROM orders WHERE id = ?', [req.params.id]);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   const isOwner = order.user_id === req.user.id;
   const isStoreAdminForOrder = req.user.role === 'store_admin' && req.user.store_id === order.store_id;
@@ -201,13 +197,11 @@ router.get('/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Not your order' });
   }
 
-  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-  const history = db
-    .prepare('SELECT * FROM order_status_history WHERE order_id = ? ORDER BY changed_at')
-    .all(order.id);
+  const items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+  const history = await db.all('SELECT * FROM order_status_history WHERE order_id = ? ORDER BY changed_at', [order.id]);
 
   res.json({ order: { ...order, items, history } });
-});
+}));
 
 module.exports = router;
 module.exports.computeOrderTotals = computeOrderTotals;

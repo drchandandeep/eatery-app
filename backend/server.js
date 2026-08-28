@@ -5,6 +5,8 @@ const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
 
+const db = require('./db/database');
+
 const authRoutes = require('./routes/auth');
 const storeRoutes = require('./routes/stores');
 const menuRoutes = require('./routes/menu');
@@ -22,7 +24,7 @@ app.use(cors());
 app.use(express.json({ limit: '8mb' }));
 app.use(morgan('dev'));
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.get('/api/health', (req, res) => res.json({ ok: true, database: db.usingTurso ? 'turso' : 'local-file' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/stores', storeRoutes);
@@ -39,12 +41,26 @@ app.use('/api/platform', platformRoutes);
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
-// Fallback error handler
+// Fallback error handler. Every route handler below is async and any
+// rejected promise (e.g. a failed database call) is forwarded here via
+// next(err) -- see utils/asyncHandler.js.
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: 'Something went wrong on the server' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Kahumbo backend running on http://localhost:${PORT}`);
-});
+// Wait for the database schema to be ready (tables created/migrated)
+// before accepting any traffic -- this matters more now than it did with
+// better-sqlite3, since the schema setup is now an async network call to
+// Turso rather than an instant local file operation.
+db.ready
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Kahumbo backend running on http://localhost:${PORT}`);
+      console.log(`Database: ${db.usingTurso ? 'Turso (persistent)' : 'local file (db/kahumbo.db)'}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to initialize the database. Server not started.', err);
+    process.exit(1);
+  });

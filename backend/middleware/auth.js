@@ -1,6 +1,7 @@
 // middleware/auth.js
 const jwt = require('jsonwebtoken');
 const db = require('../db/database');
+const asyncHandler = require('../utils/asyncHandler');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
@@ -30,8 +31,8 @@ function requireStoreAdmin(req, res, next) {
 // lapsed. Customers are never charged, so this only ever applies to the
 // store_admin side of the API. Also flips a stale 'active' status to
 // 'expired' in the DB the moment we notice the expiry date has passed.
-function requireActiveSubscription(req, res, next) {
-  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.user.store_id);
+const requireActiveSubscription = asyncHandler(async (req, res, next) => {
+  const store = await db.get('SELECT * FROM stores WHERE id = ?', [req.user.store_id]);
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
   const now = new Date();
@@ -40,7 +41,7 @@ function requireActiveSubscription(req, res, next) {
 
   if (lapsed) {
     if (store.subscription_status === 'active') {
-      db.prepare("UPDATE stores SET subscription_status = 'expired' WHERE id = ?").run(store.id);
+      await db.run("UPDATE stores SET subscription_status = 'expired' WHERE id = ?", [store.id]);
     }
     return res.status(402).json({
       error: 'Your annual store subscription is inactive or has expired. Renew to continue.',
@@ -50,7 +51,7 @@ function requireActiveSubscription(req, res, next) {
 
   req.store = store;
   next();
-}
+});
 
 // Platform owner (you) -- reviews subscription payment proofs, manages the
 // platform's own payment QR code. Separate from store_admin: a platform

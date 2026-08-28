@@ -1,12 +1,14 @@
 // screens/CheckoutScreen.js
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Image } from 'react-native';
+import * as Location from 'expo-location';
 import { colors, spacing, type, radius } from '../theme';
 import Button from '../components/Button';
 import { useCart } from '../context/CartContext';
 import { api } from '../api/client';
 import { showAlert } from '../utils/alert';
 import { buildUpiUri, openUpiApp } from '../utils/upi';
+import { haversineKm } from '../utils/geo';
 
 // Client-side estimate only, shown before the order is placed -- the real,
 // authoritative total is always recomputed server-side (see
@@ -33,15 +35,55 @@ export default function CheckoutScreen({ navigation }) {
   const [storeName, setStoreName] = useState('');
   const [upiAttempted, setUpiAttempted] = useState(false);
 
+  // Store's own coordinates + its delivery radius (0-7km), used to show a
+  // live "within range" check against the delivery address the customer
+  // enters below -- see backend/routes/menu.js and backend/routes/orders.js.
+  const [storeGeo, setStoreGeo] = useState(null); // { lat, lng, radiusKm } | null
+
+  // The delivery address's own coordinates, captured via device location.
+  // This is what actually gets validated against the store's radius --
+  // both here (for instant feedback) and, authoritatively, on the server
+  // when the order is placed. Free-typed text alone can't be checked.
+  const [addressCoords, setAddressCoords] = useState(null); // { lat, lng } | null
+  const [locating, setLocating] = useState(false);
+
   useEffect(() => {
     api
       .getMenu()
       .then((data) => {
         setStoreQr(data.store_order_qr || null);
         setStoreName(data.store_name || 'Kahumbo');
+        if (data.store_lat != null && data.store_lng != null) {
+          setStoreGeo({ lat: data.store_lat, lng: data.store_lng, radiusKm: data.store_delivery_radius_km ?? 7 });
+        }
       })
       .catch(() => {});
   }, []);
+
+  const distanceKm = addressCoords && storeGeo
+    ? haversineKm(addressCoords.lat, addressCoords.lng, storeGeo.lat, storeGeo.lng)
+    : null;
+  const withinRange = distanceKm != null && storeGeo ? distanceKm <= storeGeo.radiusKm : null;
+
+  async function handleUseCurrentLocation() {
+    setLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert(
+          'Location needed',
+          `We need your delivery location to confirm it\u2019s within ${storeGeo?.radiusKm ?? 7}km of ${storeName || 'the store'}. Please allow location access.`
+        );
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({});
+      setAddressCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    } catch (err) {
+      showAlert('Could not get location', err.message);
+    } finally {
+      setLocating(false);
+    }
+  }
 
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax + DELIVERY_FEE;
@@ -80,6 +122,20 @@ export default function CheckoutScreen({ navigation }) {
       showAlert('Delivery address needed', 'Please add where we should deliver your order.');
       return;
     }
+    if (!addressCoords) {
+      showAlert(
+        'Confirm delivery location',
+        `Tap "Use my current location" so we can automatically confirm this address is within ${storeGeo?.radiusKm ?? 7}km of ${storeName || 'the store'}.`
+      );
+      return;
+    }
+    if (withinRange === false) {
+      showAlert(
+        'Delivery address out of range',
+        `This location is about ${distanceKm.toFixed(1)}km from ${storeName || 'the store'}, which is outside its ${storeGeo?.radiusKm ?? 7}km delivery area. Please choose a closer delivery address.`
+      );
+      return;
+    }
     if (payment === 'qr' && !storeQr) {
       showAlert('QR not available', "This store hasn't set up a payment QR code yet. Please choose Cash on Delivery.");
       return;
@@ -90,6 +146,8 @@ export default function CheckoutScreen({ navigation }) {
       const { order } = await api.placeOrder({
         items: currentCartItems(),
         address_line: address.trim(),
+        address_lat: addressCoords.lat,
+        address_lng: addressCoords.lng,
         payment_method: payment,
       });
       clearCart();
@@ -110,11 +168,35 @@ export default function CheckoutScreen({ navigation }) {
         <TextInput
           style={styles.input}
           value={address}
-          onChangeText={setAddress}
+          onChangeText={(v) => { setAddress(v); setAddressCoords(null); }}
           placeholder="Street, city, zip"
           placeholderTextColor={colors.textMuted}
           multiline
         />
+
+        <Button
+          title={locating ? 'Locating\u2026' : addressCoords ? 'Update delivery location' : 'Use my current location'}
+          variant="outline"
+          onPress={handleUseCurrentLocation}
+          loading={locating}
+          style={{ marginTop: spacing(2.5) }}
+        />
+
+        {addressCoords && storeGeo && (
+          <View style={[styles.rangeBanner, withinRange ? styles.rangeBannerOk : styles.rangeBannerBad]}>
+            <Text style={[styles.rangeBannerText, { color: withinRange ? colors.success : colors.danger }]}>
+              {withinRange
+                ? `\u2713 ${distanceKm.toFixed(1)}km from ${storeName || 'the store'} \u2014 within its ${storeGeo.radiusKm}km delivery area`
+                : `\u2717 ${distanceKm.toFixed(1)}km away \u2014 outside the ${storeGeo.radiusKm}km delivery area`}
+            </Text>
+          </View>
+        )}
+        {!addressCoords && (
+          <Text style={[type.caption, { marginTop: spacing(2) }]}>
+            We automatically check every delivery address against the store's {storeGeo?.radiusKm ?? 7}km delivery
+            area -- tap the button above so we can confirm this one.
+          </Text>
+        )}
 
         <Text style={[styles.label, { marginTop: spacing(5) }]}>Payment method</Text>
         <View style={{ gap: spacing(2) }}>
@@ -176,6 +258,7 @@ export default function CheckoutScreen({ navigation }) {
           title={payment === 'qr' ? `I've paid \u2014 Place order \u00b7 \u20b9${Math.round(total)}` : `Place order \u00b7 \u20b9${Math.round(total)}`}
           onPress={handlePlaceOrder}
           loading={placing}
+          disabled={withinRange === false}
         />
       </View>
     </View>
@@ -226,6 +309,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   radioActive: { borderColor: colors.accent, backgroundColor: colors.accent },
+  rangeBanner: {
+    marginTop: spacing(2.5),
+    paddingVertical: spacing(2.5),
+    paddingHorizontal: spacing(3.5),
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  rangeBannerOk: { backgroundColor: '#EAF6EA', borderColor: colors.success },
+  rangeBannerBad: { backgroundColor: '#FBEAEA', borderColor: colors.danger },
+  rangeBannerText: { fontSize: 13, fontWeight: '700' },
   qrCard: {
     marginTop: spacing(3),
     padding: spacing(4),

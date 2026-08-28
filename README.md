@@ -187,17 +187,28 @@ machine pointed at that deployed backend URL.
 
 ## Notes & next steps
 
-- **Persistent storage is required in production, not optional.** Without a
-  persistent disk, `DB_PATH` defaults to a file inside the container's own
-  filesystem, which Render wipes on every restart or redeploy (Render
-  restarts services on its own sometimes, not only when you push code) --
-  this silently deletes every real store, customer, order, and uploaded QR
-  code, keeping only what `db/seed.js` recreates. Fix: Render dashboard ->
-  your service -> **Disks** tab -> **Add Disk**, choose a mount path (e.g.
-  `/var/data`), then set the `DB_PATH` environment variable to a file
-  inside that mount (e.g. `/var/data/kahumbo.db`) in the **Environment**
-  tab. See `.env.example` for the exact variable. This has a small monthly
-  cost on top of the Starter compute plan.
+- **Persistent storage: this app uses Turso, not a Render disk.** Render's
+  Free compute tier doesn't support persistent disks at all (that's a paid
+  Starter-tier feature) -- without one, the database used to live inside
+  the container's own filesystem, which Render wipes on every restart,
+  redeploy, or idle-timeout wake-up (Render restarts/sleeps services on its
+  own, not only when you push code). That silently deleted every real
+  store, customer, order, and uploaded QR code, keeping only what
+  `db/seed.js` recreates.
+
+  The fix: the backend now stores its database in **Turso** (a hosted,
+  SQLite-compatible database with a genuinely persistent free tier) instead
+  of a local file. This needs **zero Render disk and zero extra Render
+  cost** -- it works on Render's Free compute plan.
+
+  Setup (one-time): create a free database at https://turso.tech, then set
+  two environment variables on your Render service (**Environment** tab):
+  `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` -- see `.env.example` for the
+  exact names and where to find these values in the Turso dashboard/CLI.
+  If these two variables are missing, the app automatically falls back to
+  a local file (`db/kahumbo.db`) -- convenient for local development on
+  your own laptop, but do not rely on this in production on Render, since
+  it has exactly the same wipe-on-restart problem described above.
 
 - **Every store shares the same standard Kahumbo menu.** `db/kahumboMenu.js`
   holds the one true menu template (categories, items, prices, photos); it's

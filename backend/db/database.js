@@ -11,6 +11,15 @@
 // setup: it falls back to a local file (db/kahumbo.db), so you don't need
 // a Turso account just to run the app on your own machine.
 //
+// IMPORTANT: this module reads process.env.TURSO_DATABASE_URL at load
+// time, so whatever script requires this module MUST load the .env file
+// (require('dotenv').config()) BEFORE requiring this file -- otherwise it
+// silently falls back to the local file, even in production. This bit
+// Kahumbo once already: db/seed.js didn't load dotenv, so `node
+// db/seed.js` silently wrote to a throwaway local file instead of the
+// real Turso database, even though the same .env had a valid Turso URL.
+// The safety check below makes that mistake loud instead of silent.
+//
 // IMPORTANT DIFFERENCE FROM BEFORE: every database call is now async
 // (returns a Promise) because Turso talks to a remote server over the
 // network -- unlike better-sqlite3, which read the local file instantly
@@ -21,6 +30,21 @@ const { createClient } = require('@libsql/client');
 const path = require('path');
 
 const usingTurso = !!process.env.TURSO_DATABASE_URL;
+
+// Loud, impossible-to-miss startup announcement of which database this
+// process is actually talking to -- this used to be a silent decision.
+if (usingTurso) {
+  console.log(`[db] Using Turso: ${process.env.TURSO_DATABASE_URL}`);
+} else {
+  console.log(
+    '[db] TURSO_DATABASE_URL is not set in this process\u2019s environment -- ' +
+    'falling back to a local file at db/kahumbo.db. This is fine for local ' +
+    'testing, but on Render this file is wiped on every restart/redeploy, ' +
+    'and it means this process is NOT the same database as your real data. ' +
+    'If you expected Turso here, make sure whatever script started this ' +
+    'process calls require(\'dotenv\').config() BEFORE requiring db/database.js.'
+  );
+}
 
 const client = createClient(
   usingTurso

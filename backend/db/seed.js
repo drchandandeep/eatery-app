@@ -7,6 +7,7 @@
 // Safe to re-run: if any stores already exist, it does nothing (see
 // storeCount check below) rather than creating duplicates.
 
+require('dotenv').config();
 const { nanoid } = require('nanoid');
 const bcrypt = require('bcryptjs');
 const db = require('./database');
